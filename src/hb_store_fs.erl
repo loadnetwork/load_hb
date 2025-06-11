@@ -25,7 +25,9 @@
 -include("include/hb.hrl").
 
 %% @doc Initialize the file system store with the given data directory.
-start(#{ <<"name">> := DataDir }) ->
+start(#{ <<"prefix">> := DataDir }) ->
+    ok = filelib:ensure_dir(DataDir);
+start(#{ <<"name">> := DataDir }) ->  % Keep backward compatibility
     ok = filelib:ensure_dir(DataDir).
 
 %% @doc Stop the file system store. Currently a no-op.
