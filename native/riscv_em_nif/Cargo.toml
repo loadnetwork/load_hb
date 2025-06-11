@@ -10,7 +10,7 @@ path = "src/lib.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-revm = { version = "19.4.0", features = ["std"] }
+revm = {git = "https://github.com/bluealloy/revm", tag = "v70", features=["optional_block_gas_limit"]}
 r55 = { git = "https://github.com/loadnetwork/r55.git", branch = "main" }
 
 rustler = "0.29.1"
