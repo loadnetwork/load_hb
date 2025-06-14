@@ -20,7 +20,7 @@ fn query() -> NifResult<String> {
 }
 
 // update this adding `query()` function
-rustler::init!("my_device", [hello, query]);
+rustler::init!("my_device_nif", [hello, query]);
 
 /// tests
 
