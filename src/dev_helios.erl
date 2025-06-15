@@ -62,7 +62,7 @@ info(_Msg1, _Msg2, _Opts) ->
         <<"description">> => <<"Helios Ethereum light client with HTTP JSON-RPC server">>,
         <<"version">> => <<"0.1.0">>,
         <<"status">> => get_server_status(),
-        <<"server_address">> => get_server_address()
+        <<"server_address">> => <<"https://eth.rpc.rs">>
     },
     {ok, #{<<"status">> => 200, <<"body">> => InfoBody}}.
 
