@@ -1,11 +1,10 @@
 use alloy::{
     eips::BlockId,
-    primitives::{Address, B256, Bytes, U256}
+    primitives::{Address, B256, Bytes, U256},
 };
 use anyhow::Error;
 use serde_json::Value;
 use std::str::FromStr;
-
 
 pub fn parse_block_id(value: &Value) -> Result<BlockId, Error> {
     match value {

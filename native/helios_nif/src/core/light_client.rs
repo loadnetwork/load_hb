@@ -1,16 +1,16 @@
 use alloy::eips::BlockId;
 use anyhow::Error;
-use hyper::{
-    Body, Method, Request, Response, StatusCode,};
+use hyper::{Body, Method, Request, Response, StatusCode};
 use serde_json::{Value, json};
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 use tracing::{error, info};
 
-use crate::core::types::{JsonRpcRequest, JsonRpcError, JsonRpcErrorResponse, JsonRpcResponse, ServerState};
-use crate::core::utils::{parse_address, parse_b256, parse_block_id, parse_bytes, parse_u256};
 use crate::core::server::create_error_response;
-
+use crate::core::types::{
+    JsonRpcError, JsonRpcErrorResponse, JsonRpcRequest, JsonRpcResponse, ServerState,
+};
+use crate::core::utils::{parse_address, parse_b256, parse_block_id, parse_bytes, parse_u256};
 
 pub async fn handle_request(
     req: Request<Body>,
@@ -311,4 +311,3 @@ pub async fn handle_request(
 
     Ok(response)
 }
-

@@ -15,9 +15,8 @@ use tracing::{error, info};
 use tracing_subscriber::FmtSubscriber;
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 
-use crate::core::types::{JsonRpcError, JsonRpcErrorResponse, ServerState};
 use crate::core::light_client::handle_request;
-
+use crate::core::types::{JsonRpcError, JsonRpcErrorResponse, ServerState};
 
 pub fn create_error_response(
     code: i32,
@@ -89,7 +88,7 @@ pub fn start_server(
 
     runtime.spawn(async move {
         info!(target: "helios::server", "Starting HTTP server on {}", address);
-        
+
         let make_svc = make_service_fn(move |_conn| {
             let state = state_clone.clone();
             async move {
@@ -98,19 +97,18 @@ pub fn start_server(
                 }))
             }
         });
-        
+
         let server = Server::bind(&address).serve(make_svc);
-        
         let shutdown_signal = {
             let mut state = state.lock().unwrap();
             state.shutdown_signal.take().unwrap()
         };
-        
+
         let server = server.with_graceful_shutdown(async {
             shutdown_signal.await.ok();
             info!(target: "helios::server", "Server shutting down gracefully");
         });
-        
+
         info!(target: "helios::server", "HTTP server running at {}", address);
         if let Err(e) = server.await {
             error!(target: "helios::server", "Server error: {}", e);
