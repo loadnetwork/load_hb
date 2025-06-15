@@ -93,7 +93,8 @@ default_message() ->
 			% temporal hack, for the future should load it from config
             #{<<"name">> => <<"evm@1.0">>, <<"module">> => dev_evm},
 			#{<<"name">> => <<"riscv-em@1.0">>, <<"module">> => dev_riscv_em},
-			#{<<"name">> => <<"kem@1.0">>, <<"module">> => dev_kem}
+			#{<<"name">> => <<"kem@1.0">>, <<"module">> => dev_kem},
+            #{<<"name">> => <<"helios@1.0">>, <<"module">> => dev_helios}
         ],
         %% Default execution cache control options
         cache_control => [<<"no-cache">>, <<"no-store">>],
