@@ -1,6 +1,6 @@
 pub mod core;
 
-use crate::core::light_client;
+use crate::core::server;
 use rustler::{Env, Error, NifResult, ResourceArc, Term};
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -40,7 +40,7 @@ fn start_helios(
 
     let data_dir_path = PathBuf::from(data_dir);
 
-    let runtime = light_client::start_server(
+    let runtime = server::start_server(
         socket_addr,
         execution_rpc.to_string(),
         consensus_rpc.to_string(),
