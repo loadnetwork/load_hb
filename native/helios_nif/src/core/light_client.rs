@@ -1,16 +1,16 @@
-use anyhow::Error;
 use alloy::{
     eips::BlockId,
-    primitives::{Address, Bytes, B256, U256},
+    primitives::{Address, B256, Bytes, U256},
     rpc::types::{Filter, Log},
 };
-use helios::ethereum::{config::networks::Network, EthereumClientBuilder};
+use anyhow::Error;
+use helios::ethereum::{EthereumClientBuilder, config::networks::Network};
 use hyper::{
-    service::{make_service_fn, service_fn},
     Body, Method, Request, Response, Server, StatusCode,
+    service::{make_service_fn, service_fn},
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -19,8 +19,8 @@ use std::sync::{Arc, Mutex};
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 use tracing::{error, info};
-use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 use tracing_subscriber::FmtSubscriber;
+use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 
 #[derive(Deserialize, Debug)]
 struct JsonRpcRequest {
@@ -70,21 +70,24 @@ fn parse_block_id(value: &Value) -> Result<BlockId, Error> {
                 Ok(BlockId::finalized())
             } else if s.starts_with("0x") {
                 // Try to parse as block hash
-                let hash = B256::from_str(s).map_err(|e| Error::msg(format!("Invalid block hash: {}", e)))?;
+                let hash = B256::from_str(s)
+                    .map_err(|e| Error::msg(format!("Invalid block hash: {}", e)))?;
                 Ok(BlockId::Hash(hash.into()))
             } else {
                 // Try to parse as block number
-                let num = s.parse::<u64>().map_err(|e| Error::msg(format!("Invalid block number: {}", e)))?;
+                let num = s
+                    .parse::<u64>()
+                    .map_err(|e| Error::msg(format!("Invalid block number: {}", e)))?;
                 Ok(BlockId::Number(num.into()))
             }
-        },
+        }
         Value::Number(n) => {
             if let Some(num) = n.as_u64() {
                 Ok(BlockId::Number(num.into()))
             } else {
                 Err(Error::msg("Invalid block number"))
             }
-        },
+        }
         _ => Err(Error::msg("Invalid block identifier")),
     }
 }
@@ -93,7 +96,7 @@ fn parse_address(value: &Value) -> Result<Address, Error> {
     match value {
         Value::String(s) => {
             Address::from_str(s).map_err(|e| Error::msg(format!("Invalid address: {}", e)))
-        },
+        }
         _ => Err(Error::msg("Invalid address format")),
     }
 }
@@ -102,7 +105,7 @@ fn parse_b256(value: &Value) -> Result<B256, Error> {
     match value {
         Value::String(s) => {
             B256::from_str(s).map_err(|e| Error::msg(format!("Invalid hash: {}", e)))
-        },
+        }
         _ => Err(Error::msg("Invalid hash format")),
     }
 }
@@ -111,14 +114,14 @@ fn parse_u256(value: &Value) -> Result<U256, Error> {
     match value {
         Value::String(s) => {
             U256::from_str(s).map_err(|e| Error::msg(format!("Invalid U256: {}", e)))
-        },
+        }
         Value::Number(n) => {
             if let Some(num) = n.as_u64() {
                 Ok(U256::from(num))
             } else {
                 Err(Error::msg("Invalid U256 number"))
             }
-        },
+        }
         _ => Err(Error::msg("Invalid U256 format")),
     }
 }
@@ -128,12 +131,13 @@ fn parse_bytes(value: &Value) -> Result<Bytes, Error> {
         Value::String(s) => {
             if s.starts_with("0x") {
                 let s = s.trim_start_matches("0x");
-                let bytes = hex::decode(s).map_err(|e| Error::msg(format!("Invalid hex: {}", e)))?;
+                let bytes =
+                    hex::decode(s).map_err(|e| Error::msg(format!("Invalid hex: {}", e)))?;
                 Ok(Bytes::from(bytes))
             } else {
                 Err(Error::msg("Hex string must start with 0x"))
             }
-        },
+        }
         _ => Err(Error::msg("Invalid bytes format")),
     }
 }
@@ -143,7 +147,7 @@ async fn handle_request(
     state: Arc<Mutex<ServerState>>,
 ) -> Result<Response<Body>, Infallible> {
     let mut response = Response::new(Body::empty());
-    
+
     if req.method() == Method::POST && (req.uri().path() == "/" || req.uri().path() == "") {
         let whole_body = match hyper::body::to_bytes(req.into_body()).await {
             Ok(body) => body,
@@ -153,7 +157,7 @@ async fn handle_request(
                 return Ok(response);
             }
         };
-        
+
         let rpc_req: JsonRpcRequest = match serde_json::from_slice(&whole_body) {
             Ok(req) => req,
             Err(e) => {
@@ -174,20 +178,18 @@ async fn handle_request(
                 return Ok(response);
             }
         };
-        
+
         info!("Received JSON-RPC request: method={}", rpc_req.method);
-        
+
         let client = {
             let state_guard = state.lock().unwrap();
             state_guard.client.clone()
         };
-        
+
         let method_result = match rpc_req.method.as_str() {
-            "eth_blockNumber" => {
-                match client.get_block_number().await {
-                    Ok(v) => Ok(json!(v)),
-                    Err(e) => Err(Error::msg(e.to_string()))
-                }
+            "eth_blockNumber" => match client.get_block_number().await {
+                Ok(v) => Ok(json!(v)),
+                Err(e) => Err(Error::msg(e.to_string())),
             },
             "eth_getBlockByNumber" => {
                 if rpc_req.params.len() < 2 {
@@ -197,18 +199,24 @@ async fn handle_request(
                         Ok(id) => id,
                         Err(e) => return create_error_response(-32602, &e.to_string(), rpc_req.id),
                     };
-                    
+
                     let full_tx = match &rpc_req.params[1] {
                         Value::Bool(b) => *b,
-                        _ => return create_error_response(-32602, "Invalid full_tx parameter", rpc_req.id),
+                        _ => {
+                            return create_error_response(
+                                -32602,
+                                "Invalid full_tx parameter",
+                                rpc_req.id,
+                            );
+                        }
                     };
-                    
+
                     match client.get_block(block_id, full_tx).await {
                         Ok(v) => Ok(json!(v)),
-                        Err(e) => Err(Error::msg(e.to_string()))
+                        Err(e) => Err(Error::msg(e.to_string())),
                     }
                 }
-            },
+            }
             "eth_getBlockByHash" => {
                 if rpc_req.params.len() < 2 {
                     Err(Error::msg("Invalid params for eth_getBlockByHash"))
@@ -217,18 +225,24 @@ async fn handle_request(
                         Ok(h) => h,
                         Err(e) => return create_error_response(-32602, &e.to_string(), rpc_req.id),
                     };
-                    
+
                     let full_tx = match &rpc_req.params[1] {
                         Value::Bool(b) => *b,
-                        _ => return create_error_response(-32602, "Invalid full_tx parameter", rpc_req.id),
+                        _ => {
+                            return create_error_response(
+                                -32602,
+                                "Invalid full_tx parameter",
+                                rpc_req.id,
+                            );
+                        }
                     };
-                    
+
                     match client.get_block(BlockId::Hash(hash.into()), full_tx).await {
                         Ok(v) => Ok(json!(v)),
-                        Err(e) => Err(Error::msg(e.to_string()))
+                        Err(e) => Err(Error::msg(e.to_string())),
                     }
                 }
-            },
+            }
             "eth_getTransactionByHash" => {
                 if rpc_req.params.is_empty() {
                     Err(Error::msg("Invalid params for eth_getTransactionByHash"))
@@ -237,13 +251,13 @@ async fn handle_request(
                         Ok(h) => h,
                         Err(e) => return create_error_response(-32602, &e.to_string(), rpc_req.id),
                     };
-                    
+
                     match client.get_transaction(hash).await {
                         Ok(v) => Ok(json!(v)),
-                        Err(e) => Err(Error::msg(e.to_string()))
+                        Err(e) => Err(Error::msg(e.to_string())),
                     }
                 }
-            },
+            }
             "eth_getTransactionReceipt" => {
                 if rpc_req.params.is_empty() {
                     Err(Error::msg("Invalid params for eth_getTransactionReceipt"))
@@ -252,13 +266,13 @@ async fn handle_request(
                         Ok(h) => h,
                         Err(e) => return create_error_response(-32602, &e.to_string(), rpc_req.id),
                     };
-                    
+
                     match client.get_transaction_receipt(hash).await {
                         Ok(v) => Ok(json!(v)),
-                        Err(e) => Err(Error::msg(e.to_string()))
+                        Err(e) => Err(Error::msg(e.to_string())),
                     }
                 }
-            },
+            }
             "eth_sendRawTransaction" => {
                 if rpc_req.params.is_empty() {
                     Err(Error::msg("Invalid params for eth_sendRawTransaction"))
@@ -267,13 +281,13 @@ async fn handle_request(
                         Ok(b) => b,
                         Err(e) => return create_error_response(-32602, &e.to_string(), rpc_req.id),
                     };
-                    
+
                     match client.send_raw_transaction(&bytes).await {
                         Ok(v) => Ok(json!(v)),
-                        Err(e) => Err(Error::msg(e.to_string()))
+                        Err(e) => Err(Error::msg(e.to_string())),
                     }
                 }
-            },
+            }
             "eth_getBalance" => {
                 if rpc_req.params.len() < 2 {
                     Err(Error::msg("Invalid params for eth_getBalance"))
@@ -282,18 +296,18 @@ async fn handle_request(
                         Ok(a) => a,
                         Err(e) => return create_error_response(-32602, &e.to_string(), rpc_req.id),
                     };
-                    
+
                     let block_id = match parse_block_id(&rpc_req.params[1]) {
                         Ok(id) => id,
                         Err(e) => return create_error_response(-32602, &e.to_string(), rpc_req.id),
                     };
-                    
+
                     match client.get_balance(address, block_id).await {
                         Ok(v) => Ok(json!(v)),
-                        Err(e) => Err(Error::msg(e.to_string()))
+                        Err(e) => Err(Error::msg(e.to_string())),
                     }
                 }
-            },
+            }
             "eth_getCode" => {
                 if rpc_req.params.len() < 2 {
                     Err(Error::msg("Invalid params for eth_getCode"))
@@ -302,18 +316,18 @@ async fn handle_request(
                         Ok(a) => a,
                         Err(e) => return create_error_response(-32602, &e.to_string(), rpc_req.id),
                     };
-                    
+
                     let block_id = match parse_block_id(&rpc_req.params[1]) {
                         Ok(id) => id,
                         Err(e) => return create_error_response(-32602, &e.to_string(), rpc_req.id),
                     };
-                    
+
                     match client.get_code(address, block_id).await {
                         Ok(v) => Ok(json!(v)),
-                        Err(e) => Err(Error::msg(e.to_string()))
+                        Err(e) => Err(Error::msg(e.to_string())),
                     }
                 }
-            },
+            }
             "eth_getTransactionCount" => {
                 if rpc_req.params.len() < 2 {
                     Err(Error::msg("Invalid params for eth_getTransactionCount"))
@@ -322,18 +336,18 @@ async fn handle_request(
                         Ok(a) => a,
                         Err(e) => return create_error_response(-32602, &e.to_string(), rpc_req.id),
                     };
-                    
+
                     let block_id = match parse_block_id(&rpc_req.params[1]) {
                         Ok(id) => id,
                         Err(e) => return create_error_response(-32602, &e.to_string(), rpc_req.id),
                     };
-                    
+
                     match client.get_nonce(address, block_id).await {
                         Ok(v) => Ok(json!(v)),
-                        Err(e) => Err(Error::msg(e.to_string()))
+                        Err(e) => Err(Error::msg(e.to_string())),
                     }
                 }
-            },
+            }
             "eth_getStorageAt" => {
                 if rpc_req.params.len() < 3 {
                     Err(Error::msg("Invalid params for eth_getStorageAt"))
@@ -342,65 +356,54 @@ async fn handle_request(
                         Ok(a) => a,
                         Err(e) => return create_error_response(-32602, &e.to_string(), rpc_req.id),
                     };
-                    
+
                     let slot = match parse_u256(&rpc_req.params[1]) {
                         Ok(s) => s,
                         Err(e) => return create_error_response(-32602, &e.to_string(), rpc_req.id),
                     };
-                    
+
                     let block_id = match parse_block_id(&rpc_req.params[2]) {
                         Ok(id) => id,
                         Err(e) => return create_error_response(-32602, &e.to_string(), rpc_req.id),
                     };
-                    
+
                     match client.get_storage_at(address, slot, block_id).await {
                         Ok(v) => Ok(json!(v)),
-                        Err(e) => Err(Error::msg(e.to_string()))
+                        Err(e) => Err(Error::msg(e.to_string())),
                     }
                 }
+            }
+            "eth_chainId" => match Ok::<u64, Error>(client.get_chain_id().await) {
+                Ok(v) => Ok(json!(v)),
+                Err(e) => Err(Error::msg(e.to_string())),
             },
-            "eth_chainId" => {
-                match Ok::<u64, Error>(client.get_chain_id().await) {
-                    Ok(v) => Ok(json!(v)),
-                    Err(e) => Err(Error::msg(e.to_string()))
-                }
+            "eth_gasPrice" => match client.get_gas_price().await {
+                Ok(v) => Ok(json!(v)),
+                Err(e) => Err(Error::msg(e.to_string())),
             },
-            "eth_gasPrice" => {
-                match client.get_gas_price().await {
-                    Ok(v) => Ok(json!(v)),
-                    Err(e) => Err(Error::msg(e.to_string()))
-                }
+            "eth_maxPriorityFeePerGas" => match client.get_priority_fee().await {
+                Ok(v) => Ok(json!(v)),
+                Err(e) => Err(Error::msg(e.to_string())),
             },
-            "eth_maxPriorityFeePerGas" => {
-                match client.get_priority_fee().await {
-                    Ok(v) => Ok(json!(v)),
-                    Err(e) => Err(Error::msg(e.to_string()))
-                }
+            "eth_blobBaseFee" => match client.get_blob_base_fee().await {
+                Ok(v) => Ok(json!(v)),
+                Err(e) => Err(Error::msg(e.to_string())),
             },
-            "eth_blobBaseFee" => {
-                match client.get_blob_base_fee().await {
-                    Ok(v) => Ok(json!(v)),
-                    Err(e) => Err(Error::msg(e.to_string()))
-                }
+            "eth_syncing" => match client.syncing().await {
+                Ok(v) => Ok(json!(v)),
+                Err(e) => Err(Error::msg(e.to_string())),
             },
-            "eth_syncing" => {
-                match client.syncing().await {
-                    Ok(v) => Ok(json!(v)),
-                    Err(e) => Err(Error::msg(e.to_string()))
-                }
+            "eth_coinbase" => match client.get_coinbase().await {
+                Ok(v) => Ok(json!(v)),
+                Err(e) => Err(Error::msg(e.to_string())),
             },
-            "eth_coinbase" => {
-                match client.get_coinbase().await {
-                    Ok(v) => Ok(json!(v)),
-                    Err(e) => Err(Error::msg(e.to_string()))
-                }
-            },
-            "web3_clientVersion" => {
-                Ok(json!(client.get_client_version().await))
-            },
-            _ => Err(Error::msg(format!("Method {} not supported", rpc_req.method))),
+            "web3_clientVersion" => Ok(json!(client.get_client_version().await)),
+            _ => Err(Error::msg(format!(
+                "Method {} not supported",
+                rpc_req.method
+            ))),
         };
-        
+
         match method_result {
             Ok(result) => {
                 let json_response = JsonRpcResponse {
@@ -409,7 +412,7 @@ async fn handle_request(
                     id: rpc_req.id,
                 };
                 *response.body_mut() = Body::from(serde_json::to_string(&json_response).unwrap());
-            },
+            }
             Err(e) => {
                 error!("Error executing method {}: {}", rpc_req.method, e);
                 let error_response = JsonRpcErrorResponse {
@@ -424,7 +427,7 @@ async fn handle_request(
                 *response.body_mut() = Body::from(serde_json::to_string(&error_response).unwrap());
             }
         }
-        
+
         response.headers_mut().insert(
             hyper::header::CONTENT_TYPE,
             hyper::header::HeaderValue::from_static("application/json"),
@@ -435,11 +438,15 @@ async fn handle_request(
         *response.status_mut() = StatusCode::NOT_FOUND;
         *response.body_mut() = Body::from("Not Found");
     }
-    
+
     Ok(response)
 }
 
-fn create_error_response(code: i32, message: &str, id: Value) -> Result<Response<Body>, Infallible> {
+fn create_error_response(
+    code: i32,
+    message: &str,
+    id: Value,
+) -> Result<Response<Body>, Infallible> {
     let error_response = JsonRpcErrorResponse {
         jsonrpc: "2.0".to_string(),
         error: JsonRpcError {
@@ -448,13 +455,13 @@ fn create_error_response(code: i32, message: &str, id: Value) -> Result<Response
         },
         id,
     };
-    
+
     let mut response = Response::new(Body::from(serde_json::to_string(&error_response).unwrap()));
     response.headers_mut().insert(
         hyper::header::CONTENT_TYPE,
         hyper::header::HeaderValue::from_static("application/json"),
     );
-    
+
     Ok(response)
 }
 
@@ -474,32 +481,35 @@ pub fn start_server(
         .finish();
 
     let _ = tracing::subscriber::set_global_default(subscriber);
-    
+
     let runtime = Runtime::new()?;
-    
+
     let client = runtime.block_on(async {
         info!(target: "helios::server", "Building Helios client...");
-        
+
         let client = EthereumClientBuilder::new()
             .network(Network::Mainnet)
-            .execution_rpc(&execution_rpc).unwrap()
-            .consensus_rpc(&consensus_rpc).unwrap()
+            .execution_rpc(&execution_rpc)
+            .unwrap()
+            .consensus_rpc(&consensus_rpc)
+            .unwrap()
             .data_dir(data_dir)
             .with_file_db()
-            .build().unwrap();
-            
+            .build()
+            .unwrap();
+
         info!(target: "helios::server", "Helios client built successfully");
-        
+
         Ok::<_, Error>(client)
     })?;
-    
+
     let state = Arc::new(Mutex::new(ServerState {
         client: Arc::new(client),
         shutdown_signal: Some(shutdown_rx),
     }));
-    
+
     let state_clone = state.clone();
-    
+
     runtime.spawn(async move {
         info!(target: "helios::server", "Starting HTTP server on {}", address);
         
@@ -529,6 +539,6 @@ pub fn start_server(
             error!(target: "helios::server", "Server error: {}", e);
         }
     });
-    
+
     Ok(runtime)
 }
