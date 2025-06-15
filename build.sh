@@ -19,5 +19,6 @@ echo "Starting deployment..."
 build_nif "load_revm_nif"
 build_nif "kernel_em_nif"
 build_nif "riscv_em_nif"
+build_nif "helios_nif"
 
 echo "All NIFs built and copied successfully"
