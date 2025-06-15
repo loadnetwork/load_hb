@@ -22,38 +22,8 @@ use tracing::{error, info};
 use tracing_subscriber::FmtSubscriber;
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 
-#[derive(Deserialize, Debug)]
-struct JsonRpcRequest {
-    jsonrpc: String,
-    method: String,
-    params: Vec<Value>,
-    id: Value,
-}
+use crate::core::types::{JsonRpcRequest, JsonRpcError, JsonRpcErrorResponse, JsonRpcResponse, ServerState};
 
-#[derive(Serialize)]
-struct JsonRpcResponse {
-    jsonrpc: String,
-    result: Value,
-    id: Value,
-}
-
-#[derive(Serialize)]
-struct JsonRpcErrorResponse {
-    jsonrpc: String,
-    error: JsonRpcError,
-    id: Value,
-}
-
-#[derive(Serialize)]
-struct JsonRpcError {
-    code: i32,
-    message: String,
-}
-
-struct ServerState {
-    client: Arc<helios::ethereum::EthereumClient>,
-    shutdown_signal: Option<oneshot::Receiver<()>>,
-}
 
 fn parse_block_id(value: &Value) -> Result<BlockId, Error> {
     match value {
