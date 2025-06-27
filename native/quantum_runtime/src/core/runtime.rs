@@ -1,6 +1,6 @@
 use roqoqo::Circuit;
+use roqoqo::backends::EvaluatingBackend;
 use roqoqo::operations;
-use roqoqo::backends::{EvaluatingBackend};
 use roqoqo_quest::Backend;
 use std::collections::HashMap;
 
@@ -18,37 +18,40 @@ impl Runtime {
             num_qubits,
         }
     }
-    
-pub fn execute<F>(&self, quantum_fn: F, measurements: Vec<usize>) -> Result<HashMap<String, f64>, Box<dyn std::error::Error>>
-where
-    F: FnOnce() -> Circuit,
-{
-    let mut circuit = quantum_fn();
-    
-    // classical register
-    circuit += operations::DefinitionBit::new("ro".to_string(), measurements.len(), true);
-    
-    // add measurements
-    for (index, &qubit) in measurements.iter().enumerate() {
-        circuit += operations::MeasureQubit::new(qubit, "ro".to_string(), index);
-    }
-    
-    circuit += operations::PragmaSetNumberOfMeasurements::new(1, "ro".to_string());
-    
-    let (bit_result, _float_result, _complex_result) = self.backend.run_circuit(&circuit)?;
-    
-    // convert bit results to HashMap<String, f64>
-    let mut result = HashMap::new();
-    if let Some(measurements_vec) = bit_result.get("ro") {
-        for (shot_idx, shot_results) in measurements_vec.iter().enumerate() {
-            for (bit_idx, &bit_value) in shot_results.iter().enumerate() {
-                let key = format!("qubit_{}", measurements[bit_idx]);
-                result.insert(key, if bit_value { 1.0 } else { 0.0 });
+
+    pub fn execute<F>(
+        &self,
+        quantum_fn: F,
+        measurements: Vec<usize>,
+    ) -> Result<HashMap<String, f64>, Box<dyn std::error::Error>>
+    where
+        F: FnOnce() -> Circuit,
+    {
+        let mut circuit = quantum_fn();
+
+        // classical register
+        circuit += operations::DefinitionBit::new("ro".to_string(), measurements.len(), true);
+
+        // add measurements
+        for (index, &qubit) in measurements.iter().enumerate() {
+            circuit += operations::MeasureQubit::new(qubit, "ro".to_string(), index);
+        }
+
+        circuit += operations::PragmaSetNumberOfMeasurements::new(1, "ro".to_string());
+
+        let (bit_result, _float_result, _complex_result) = self.backend.run_circuit(&circuit)?;
+
+        // convert bit results to HashMap<String, f64>
+        let mut result = HashMap::new();
+        if let Some(measurements_vec) = bit_result.get("ro") {
+            for (shot_idx, shot_results) in measurements_vec.iter().enumerate() {
+                for (bit_idx, &bit_value) in shot_results.iter().enumerate() {
+                    let key = format!("qubit_{}", measurements[bit_idx]);
+                    result.insert(key, if bit_value { 1.0 } else { 0.0 });
+                }
             }
         }
-    }
-    
-    Ok(result)
-}
 
+        Ok(result)
+    }
 }

@@ -28,19 +28,19 @@ pub fn bell_state(control: usize, target: usize) -> Circuit {
 /// Quantum function: Quantum teleportation protocol
 pub fn quantum_teleportation(alice: usize, bob: usize, msg: usize) -> Circuit {
     let mut circuit = Circuit::new();
-    
+
     // step 1: create entangled pair between Alice and Bob
     circuit += operations::Hadamard::new(alice);
     circuit += operations::CNOT::new(alice, bob);
-    
+
     // step 2: alice applies operations to her qubit and message
     circuit += operations::CNOT::new(msg, alice);
     circuit += operations::Hadamard::new(msg);
-    
+
     // step 3: Bob applies corrections based on Alice's measurements
     circuit += operations::CNOT::new(alice, bob);
     circuit += operations::ControlledPauliZ::new(msg, bob);
-    
+
     circuit
 }
 
@@ -48,11 +48,11 @@ pub fn quantum_teleportation(alice: usize, bob: usize, msg: usize) -> Circuit {
 /// as it's simulation, therefore it's pseudo-random
 pub fn quantum_rng(bits: usize) -> Circuit {
     let mut circuit = Circuit::new();
-    
+
     // Put each qubit in superposition for true quantum randomness
     for qubit in 0..bits {
         circuit += operations::Hadamard::new(qubit);
     }
-    
+
     circuit
 }
