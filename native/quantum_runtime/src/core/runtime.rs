@@ -1,3 +1,4 @@
+use anyhow::Error;
 use roqoqo::Circuit;
 use roqoqo::backends::EvaluatingBackend;
 use roqoqo::operations;
@@ -23,7 +24,7 @@ impl Runtime {
         &self,
         quantum_fn: F,
         measurements: Vec<usize>,
-    ) -> Result<HashMap<String, f64>, Box<dyn std::error::Error>>
+    ) -> Result<HashMap<String, f64>, anyhow::Error>
     where
         F: FnOnce() -> Circuit,
     {
@@ -54,4 +55,11 @@ impl Runtime {
 
         Ok(result)
     }
+
+    // pub fn execute_serverless(&self, function_id: String, measurements: Vec<usize>) -> Result<HashMap<String, f64>, Error> {
+    //     let _ = parse_function(function_id)?;
+    //     let quantum_fn = std::fs::read_to_string();
+    //     self.execute(quantum_fn, measurements)
+        
+    // }
 }
