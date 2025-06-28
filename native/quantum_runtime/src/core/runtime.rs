@@ -56,14 +56,21 @@ impl Runtime {
         Ok(result)
     }
 
-    pub fn execute_serverless(&self, function_id: String, measurements: Vec<usize>) -> Result<HashMap<String, f64>, Error> {        
+    pub fn execute_serverless(
+        &self,
+        function_id: String,
+        measurements: Vec<usize>,
+    ) -> Result<HashMap<String, f64>, Error> {
         let registry = self.get_function_registry();
-        
+
         if let Some(quantum_fn) = registry.get(&function_id) {
             let circuit_fn = || quantum_fn();
             self.execute(circuit_fn, measurements)
         } else {
-            Err(anyhow::anyhow!("Function '{}' not found in registry", function_id))
+            Err(anyhow::anyhow!(
+                "serverless qfunction '{}' not found in registry",
+                function_id
+            ))
         }
     }
 }
