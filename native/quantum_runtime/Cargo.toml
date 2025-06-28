@@ -7,6 +7,8 @@ edition = "2024"
 roqoqo-quest = "0.16.1"
 roqoqo = "1.19.6"
 rustler = "0.29.1"
+ureq = {version = "3.0.11", features=["json"]}
+anyhow = "1.0.98"
 # roqoqo-quest = "0.14.0" for roqoqo_aqt version aligning
 # roqoqo-aqt = "0.8.0"
 # roqoqo = "1.15.2" for roqoqo_aqt version aligning
