@@ -23,4 +23,4 @@ fn compute(
     }
 }
 
-rustler::init!("quantum_runtime", [hello, compute]);
+rustler::init!("quantum_runtime_nif", [hello, compute]);
