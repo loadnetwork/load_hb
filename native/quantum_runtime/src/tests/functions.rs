@@ -4,7 +4,6 @@ use roqoqo::operations;
 // ===== QUANTUM SERVERLESS FUNCTIONS =====
 
 /// Quantum function: Create superposition
-/// load function id: 0x32a2fd8f46ac4e7abb0e02a03cb47c2f4d3fbd45dd93d1f333b535c515a2ad18
 pub fn superposition(qubit: usize) -> Circuit {
     let mut circuit = Circuit::new();
     circuit += roqoqo::operations::Hadamard::new(qubit);

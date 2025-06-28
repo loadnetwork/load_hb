@@ -1,12 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use std::result;
-
     use crate::core::runtime::Runtime;
     use crate::tests::functions::superposition;
 
     #[test]
-    fn test_superposition() {
+    fn test_superposition_execute() {
         let rt = Runtime::new(2);
 
         // Test superposition

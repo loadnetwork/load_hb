@@ -11,7 +11,7 @@ impl Runtime {
         registry.insert(
             "superposition".to_string(),
             Box::new(move || {
-                superposition(0)
+                superposition(1)
             }),
         );
 
