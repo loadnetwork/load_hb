@@ -1,7 +1,13 @@
 [package]
-name = "quantum_runtime"
+name = "quantum_runtime_nif"
 version = "0.1.0"
 edition = "2024"
+authors = ["Load Network Team"]
+
+[lib]
+name = "quantum_runtime_nif"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
 
 [dependencies]
 roqoqo-quest = "0.16.1"

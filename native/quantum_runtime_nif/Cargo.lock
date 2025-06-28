@@ -630,7 +630,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "quantum_runtime"
+name = "quantum_runtime_nif"
 version = "0.1.0"
 dependencies = [
  "anyhow",
