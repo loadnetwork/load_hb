@@ -56,10 +56,14 @@ impl Runtime {
         Ok(result)
     }
 
-    // pub fn execute_serverless(&self, function_id: String, measurements: Vec<usize>) -> Result<HashMap<String, f64>, Error> {
-    //     let _ = parse_function(function_id)?;
-    //     let quantum_fn = std::fs::read_to_string();
-    //     self.execute(quantum_fn, measurements)
+    pub fn execute_serverless(&self, function_id: String, measurements: Vec<usize>) -> Result<HashMap<String, f64>, Error> {        
+        let registry = self.get_function_registry();
         
-    // }
+        if let Some(quantum_fn) = registry.get(&function_id) {
+            let circuit_fn = || quantum_fn();
+            self.execute(circuit_fn, measurements)
+        } else {
+            Err(anyhow::anyhow!("Function '{}' not found in registry", function_id))
+        }
+    }
 }
