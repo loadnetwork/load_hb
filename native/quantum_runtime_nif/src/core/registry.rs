@@ -1,7 +1,7 @@
 use crate::core::runtime::Runtime;
+use crate::tests::functions::{quantum_rng, superposition};
 use roqoqo::Circuit;
 use std::collections::HashMap;
-use crate::tests::functions::{superposition, quantum_rng};
 
 impl Runtime {
     pub fn get_function_registry(&self) -> HashMap<String, Box<dyn Fn() -> Circuit>> {
@@ -10,16 +10,12 @@ impl Runtime {
 
         registry.insert(
             "superposition".to_string(),
-            Box::new(move || {
-                superposition(1)
-            }),
+            Box::new(move || superposition(1)),
         );
 
         registry.insert(
             "quantum_rng".to_string(),
-            Box::new(move || {
-                quantum_rng(max_qubits)
-            }),
+            Box::new(move || quantum_rng(max_qubits)),
         );
 
         registry
