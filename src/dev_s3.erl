@@ -64,6 +64,17 @@ handle_s3_request(<<"GET">>, Path, Msg, Opts) ->
             {error, #{<<"status">> => 400, <<"body">> => <<"Invalid S3 path">>}}
     end;
 
+% handle_s3_request(<<"PUT">>, Path, Msg, Opts) ->
+%     io:format("S3 DEBUG: handle_s3_request PUT with Path=~p~n", [Path]),
+%     case parse_s3_path(Path) of
+%         {object, Bucket, Key} ->
+%             Body = maps:get(<<"body">>, Msg, <<>>),
+%             io:format("S3 DEBUG: PUT object, Bucket=~p, Key=~p, Body size=~p~n", [Bucket, Key, byte_size(Body)]),
+%             put_object_handler(Bucket, Key, Body, Msg, Opts);
+%         _ -> 
+%             {error, #{<<"status">> => 400, <<"body">> => <<"Invalid PUT path - can only PUT objects">>}}
+%     end;
+
 handle_s3_request(<<"PUT">>, Path, Msg, Opts) ->
     io:format("S3 DEBUG: handle_s3_request PUT with Path=~p~n", [Path]),
     case parse_s3_path(Path) of
@@ -71,9 +82,14 @@ handle_s3_request(<<"PUT">>, Path, Msg, Opts) ->
             Body = maps:get(<<"body">>, Msg, <<>>),
             io:format("S3 DEBUG: PUT object, Bucket=~p, Key=~p, Body size=~p~n", [Bucket, Key, byte_size(Body)]),
             put_object_handler(Bucket, Key, Body, Msg, Opts);
+        {bucket, Bucket} ->
+            % PUT to bucket root = CREATE BUCKET
+            io:format("S3 DEBUG: CREATE bucket=~p~n", [Bucket]),
+            create_bucket_handler(Bucket, Msg, Opts);
         _ -> 
-            {error, #{<<"status">> => 400, <<"body">> => <<"Invalid PUT path - can only PUT objects">>}}
+            {error, #{<<"status">> => 400, <<"body">> => <<"Invalid PUT path">>}}
     end;
+
 
 handle_s3_request(Method, _Path, _Msg, _Opts) ->
     io:format("S3 DEBUG: Unsupported method=~p~n", [Method]),
@@ -161,7 +177,6 @@ get_object_handler(Bucket, Key, _Msg, Opts) ->
             }}
     end.
 
-%% PutObjectCommand
 %% PutObjectCommand handler
 put_object_handler(Bucket, Key, Body, _Msg, Opts) ->
     io:format("S3 DEBUG: put_object_handler Bucket=~p Key=~p Body size=~p~n", [Bucket, Key, byte_size(Body)]),
@@ -198,6 +213,42 @@ put_object_handler(Bucket, Key, Body, _Msg, Opts) ->
             }};
         {error, Reason} ->
             io:format("S3 DEBUG: s3_nif put_object error: ~p~n", [Reason]),
+            {error, #{
+                <<"status">> => 500,
+                <<"body">> => list_to_binary(Reason)
+            }}
+    end.
+
+%% CreateBucketCommand handler
+create_bucket_handler(BucketName, _Msg, Opts) ->
+    io:format("S3 DEBUG: create_bucket_handler BucketName=~p~n", [BucketName]),
+    S3Config = hb_opts:get(<<"s3-config">>, #{}, Opts),
+    
+    Endpoint = maps:get(<<"endpoint">>, S3Config, <<"https://s3.load.rs">>),
+    AccessKeyId = maps:get(<<"access-key-id">>, S3Config, <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>),
+    SecretAccessKey = maps:get(<<"secret-access-key">>, S3Config, <<"">>),
+    Region = maps:get(<<"region">>, S3Config, <<"eu-west-2">>),
+    
+    io:format("S3 DEBUG: CREATE_BUCKET Config - Endpoint=~p, AccessKeyId=~p, Region=~p~n", [Endpoint, AccessKeyId, Region]),
+    io:format("S3 DEBUG: Calling s3_nif:create_bucket~n"),
+    
+    case s3_nif:create_bucket(
+        Endpoint,        
+        AccessKeyId,     
+        SecretAccessKey, 
+        Region,          
+        BucketName
+    ) of
+        {ok, S3Response} ->
+            io:format("S3 DEBUG: s3_nif create_bucket success, S3Response=~p~n", [S3Response]),
+            
+            {ok, #{
+                <<"status">> => 200,
+                <<"body">> => <<>>,  % CREATE_BUCKET responses typically empty
+                <<"location">> => <<"/", BucketName/binary>>
+            }};
+        {error, Reason} ->
+            io:format("S3 DEBUG: s3_nif create_bucket error: ~p~n", [Reason]),
             {error, #{
                 <<"status">> => 500,
                 <<"body">> => list_to_binary(Reason)
