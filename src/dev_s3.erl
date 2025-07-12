@@ -52,7 +52,6 @@ handle_s3_request(<<"GET">>, Path, Msg, Opts) ->
     case parse_s3_path(Path) of
         {object, Bucket, Key} ->
             io:format("S3 DEBUG: Parsed as object, Bucket=~p, Key=~p~n", [Bucket, Key]),
-            %% GetObjectCommand
             get_object_handler(Bucket, Key, Msg, Opts);
         {bucket, Bucket} ->
             io:format("S3 DEBUG: Parsed as bucket=~p~n", [Bucket]),
@@ -63,6 +62,17 @@ handle_s3_request(<<"GET">>, Path, Msg, Opts) ->
         invalid ->
             io:format("S3 DEBUG: Invalid path~n"),
             {error, #{<<"status">> => 400, <<"body">> => <<"Invalid S3 path">>}}
+    end;
+
+handle_s3_request(<<"PUT">>, Path, Msg, Opts) ->
+    io:format("S3 DEBUG: handle_s3_request PUT with Path=~p~n", [Path]),
+    case parse_s3_path(Path) of
+        {object, Bucket, Key} ->
+            Body = maps:get(<<"body">>, Msg, <<>>),
+            io:format("S3 DEBUG: PUT object, Bucket=~p, Key=~p, Body size=~p~n", [Bucket, Key, byte_size(Body)]),
+            put_object_handler(Bucket, Key, Body, Msg, Opts);
+        _ -> 
+            {error, #{<<"status">> => 400, <<"body">> => <<"Invalid PUT path - can only PUT objects">>}}
     end;
 
 handle_s3_request(Method, _Path, _Msg, _Opts) ->
@@ -145,6 +155,49 @@ get_object_handler(Bucket, Key, _Msg, Opts) ->
             }};
         {error, Reason} ->
             io:format("S3 DEBUG: s3_nif error: ~p~n", [Reason]),
+            {error, #{
+                <<"status">> => 500,
+                <<"body">> => list_to_binary(Reason)
+            }}
+    end.
+
+%% PutObjectCommand
+%% PutObjectCommand handler
+put_object_handler(Bucket, Key, Body, _Msg, Opts) ->
+    io:format("S3 DEBUG: put_object_handler Bucket=~p Key=~p Body size=~p~n", [Bucket, Key, byte_size(Body)]),
+    S3Config = hb_opts:get(<<"s3-config">>, #{}, Opts),
+    
+    Endpoint = maps:get(<<"endpoint">>, S3Config, <<"https://s3.load.rs">>),
+    AccessKeyId = maps:get(<<"access-key-id">>, S3Config, <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>),
+    SecretAccessKey = maps:get(<<"secret-access-key">>, S3Config, <<"">>),
+    Region = maps:get(<<"region">>, S3Config, <<"eu-west-2">>),
+    
+    io:format("S3 DEBUG: PUT Config - Endpoint=~p, AccessKeyId=~p, Region=~p~n", [Endpoint, AccessKeyId, Region]),
+    io:format("S3 DEBUG: Calling s3_nif:put_object~n"),
+    
+    case s3_nif:put_object(
+        Endpoint,        
+        AccessKeyId,     
+        SecretAccessKey, 
+        Region,          
+        Bucket,          
+        Key,
+        Body             % The request body
+    ) of
+        {ok, S3Response} ->
+            io:format("S3 DEBUG: s3_nif put_object success, S3Response=~p~n", [S3Response]),
+            
+            % Extract ETag from response
+            ETag = maps:get(<<"etag">>, S3Response, <<>>),
+            
+            {ok, #{
+                <<"status">> => 200,
+                <<"body">> => <<>>,  % PUT responses typically have empty body
+                <<"etag">> => ETag,
+                <<"accept-ranges">> => <<"bytes">>
+            }};
+        {error, Reason} ->
+            io:format("S3 DEBUG: s3_nif put_object error: ~p~n", [Reason]),
             {error, #{
                 <<"status">> => 500,
                 <<"body">> => list_to_binary(Reason)
