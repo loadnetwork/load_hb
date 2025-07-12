@@ -1,5 +1,35 @@
 -module(s3_nif_test).
--export([test_get_object/0, test_put_object/0]).
+-export([test_get_object/0, test_put_object/0, test_create_bucket/0]).
+
+test_create_bucket() ->
+    io:format("=== S3 CREATE_BUCKET NIF TEST ==="),
+
+     Endpoint = <<"https://s3.load.rs">>,
+     AccessKeyId = <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>,
+     SecretAccessKey = <<"">>,
+     Region = <<"eu-west-2">>,
+     BucketName = list_to_binary(integer_to_list(erlang:system_time(second))),
+
+    io:format("Testing s3_nif:create_bucket with:~n"),
+    io:format("  Cluster Endpoint: ~p~n", [Endpoint]),
+    io:format("  AccessKeyId: ~p~n", [AccessKeyId]),
+    io:format("  BucketName: ~p~n", [BucketName]),
+
+    case s3_nif:create_bucket(Endpoint, AccessKeyId, SecretAccessKey, Region, BucketName) of
+        {ok, Response} ->
+            io:format("SUCCESS: Response: ~p~n", [Response]),
+            Body = maps:get(<<"body">>, Response, <<"no body">>),
+            io:format("Body: ~p~n", [Body]),
+            ok;
+        {error, Reason} ->
+            io:format("ERROR: ~p~n", [Reason]),
+            error;
+        Other ->
+            io:format("UNEXPECTED RESULT: ~p~n", [Other]),
+            unexpected
+    end.
+
+
 
 test_put_object() ->
     io:format("=== S3 PUT_OBJECT NIF TEST ===~n"),
@@ -8,7 +38,7 @@ test_put_object() ->
      SecretAccessKey = <<"">>,
      Region = <<"eu-west-2">>,
      Bucket = <<"darwin-1">>,
-     Key = list_to_binary(integer_to_list(erlang:system_time(second))), % unique binary obkect name,
+     Key = list_to_binary(integer_to_list(erlang:system_time(second))), % unique binary object name,
      Data = list_to_binary("hello world"),
 
     io:format("Testing s3_nif:put_object with:~n"),
@@ -33,7 +63,7 @@ test_put_object() ->
     end.
 
 test_get_object() ->
-    io:format("=== S3 NIF TEST ===~n"),
+    io:format("=== S3 GET_OBJECT NIF TEST ===~n"),
     
     Endpoint = <<"https://s3.load.rs">>,
     AccessKeyId = <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>,
