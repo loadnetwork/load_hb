@@ -2,7 +2,7 @@
 pub mod config;
 pub mod s3;
 pub mod server;
-use std::collections::HashMap;
+use std::{collections::HashMap, io::Read};
 
 use rustler::NifResult;
 
@@ -14,7 +14,7 @@ fn put_object(
     region: String,
     bucket: String,
     key: String,
-    body: Vec<u8>,
+    body: rustler::Binary,
 ) -> Result<HashMap<String, Vec<u8>>, String> {
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
     rt.block_on(async {
@@ -26,7 +26,8 @@ fn put_object(
             Some(true),
         )
         .await;
-        let body_stream = aws_sdk_s3::primitives::ByteStream::from(body);
+        let body_vec = body.as_slice().to_vec();
+        let body_stream = aws_sdk_s3::primitives::ByteStream::from(body_vec);
 
         match crate::s3::push_object(&client, &bucket, &key, body_stream).await {
             Ok(output) => {
