@@ -1,8 +1,10 @@
 mod create_bucket;
+mod create_client;
 mod push_object;
 mod retrieve_object;
 
 pub use create_bucket::create_bucket;
+pub use create_client::create_s3_client;
 pub use push_object::push_object;
 pub use retrieve_object::retrieve_object;
 
