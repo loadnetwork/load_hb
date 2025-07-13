@@ -64,17 +64,6 @@ handle_s3_request(<<"GET">>, Path, Msg, Opts) ->
             {error, #{<<"status">> => 400, <<"body">> => <<"Invalid S3 path">>}}
     end;
 
-% handle_s3_request(<<"PUT">>, Path, Msg, Opts) ->
-%     io:format("S3 DEBUG: handle_s3_request PUT with Path=~p~n", [Path]),
-%     case parse_s3_path(Path) of
-%         {object, Bucket, Key} ->
-%             Body = maps:get(<<"body">>, Msg, <<>>),
-%             io:format("S3 DEBUG: PUT object, Bucket=~p, Key=~p, Body size=~p~n", [Bucket, Key, byte_size(Body)]),
-%             put_object_handler(Bucket, Key, Body, Msg, Opts);
-%         _ -> 
-%             {error, #{<<"status">> => 400, <<"body">> => <<"Invalid PUT path - can only PUT objects">>}}
-%     end;
-
 handle_s3_request(<<"PUT">>, Path, Msg, Opts) ->
     io:format("S3 DEBUG: handle_s3_request PUT with Path=~p~n", [Path]),
     case parse_s3_path(Path) of
@@ -89,6 +78,17 @@ handle_s3_request(<<"PUT">>, Path, Msg, Opts) ->
         _ -> 
             {error, #{<<"status">> => 400, <<"body">> => <<"Invalid PUT path">>}}
     end;
+
+handle_s3_request(<<"HEAD">>, Path, Msg, Opts) ->
+    io:format("S3 DEBUG: handle_s3_request HEAD with Path=~p~n", [Path]),
+    case parse_s3_path(Path) of
+        {object, Bucket, Key} ->
+            io:format("S3 DEBUG: HEAD object, Bucket=~p, Key=~p~n", [Bucket, Key]),
+            head_object_handler(Bucket, Key, Msg, Opts);
+        _ ->
+            {error, #{<<"status">> => 400, <<"body">> => <<"Invalid HEAD path - can only HEAD objects">>}}
+    end;
+
 
 
 handle_s3_request(Method, _Path, _Msg, _Opts) ->
@@ -249,6 +249,38 @@ create_bucket_handler(BucketName, _Msg, Opts) ->
             }};
         {error, Reason} ->
             io:format("S3 DEBUG: s3_nif create_bucket error: ~p~n", [Reason]),
+            {error, #{
+                <<"status">> => 500,
+                <<"body">> => list_to_binary(Reason)
+            }}
+    end.
+
+head_object_handler(Bucket, Key, _Msg, Opts) ->
+    io:format("S3 DEBUG: head_object_handler Bucket=~p Key=~p~n", [Bucket, Key]),
+    S3Config = hb_opts:get(<<"s3-config">>, #{}, Opts),
+    
+    Endpoint = maps:get(<<"endpoint">>, S3Config, <<"https://s3.load.rs">>),
+    AccessKeyId = maps:get(<<"access-key-id">>, S3Config, <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>),
+    SecretAccessKey = maps:get(<<"secret-access-key">>, S3Config, <<"">>),
+    Region = maps:get(<<"region">>, S3Config, <<"eu-west-2">>),
+    
+    case s3_nif:head_object(Endpoint, AccessKeyId, SecretAccessKey, Region, Bucket, Key) of
+        {ok, S3Response} ->
+            ETag = maps:get(<<"etag">>, S3Response, <<>>),
+            LastModified = maps:get(<<"last_modified">>, S3Response, <<>>),
+            ContentType = maps:get(<<"content_type">>, S3Response, <<>>),
+            ContentLength = maps:get(<<"content_length">>, S3Response, <<>>),
+            
+            {ok, #{
+                <<"status">> => 200,
+                <<"body">> => <<>>,  % HEAD responses have no body
+                <<"etag">> => ETag,
+                <<"last-modified">> => LastModified,
+                <<"content-type">> => ContentType,
+                <<"content-length">> => ContentLength,
+                <<"accept-ranges">> => <<"bytes">>
+            }};
+        {error, Reason} ->
             {error, #{
                 <<"status">> => 500,
                 <<"body">> => list_to_binary(Reason)

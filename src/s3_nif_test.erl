@@ -20,8 +20,9 @@ test_head_object() ->
     case s3_nif:head_object(Endpoint, AccessKeyId, SecretAccessKey, Region, Bucket, Key) of
         {ok, Response} ->
             io:format("SUCCESS: Response: ~p~n", [Response]),
-            Body = maps:get(<<"body">>, Response, <<"no body">>),
-            io:format("Body: ~p~n", [Body]),
+            ETag = maps:get(<<"etag">>, Response, <<"no etag">>),
+            ContentType = maps:get(<<"content_type">>, Response, <<"no content_type">>),
+            io:format("ETag: ~p, ContentType: ~p~n", [ETag, ContentType]),
             ok;
         {error, Reason} ->
             io:format("ERROR: ~p~n", [Reason]),
