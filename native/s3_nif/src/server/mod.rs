@@ -1,5 +1,5 @@
 use crate::config::S3Config;
-use crate::s3::{create_bucket, get_object_with_metadata, push_object, retrieve_object};
+use crate::s3::{create_bucket, get_object_with_metadata, push_object};
 use aws_sdk_s3::Client;
 use aws_sdk_s3::primitives::ByteStream;
 use axum::{

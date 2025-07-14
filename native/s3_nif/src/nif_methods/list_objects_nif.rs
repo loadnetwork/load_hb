@@ -82,7 +82,7 @@ pub fn list_objects(
                 Ok(result)
             }
 
-            Err(e) => Err(format!("S3 List Objects Error: {}", e))
+            Err(e) => Err(format!("S3 List Objects Error: {}", e.to_string()))
         }
     })
 }
