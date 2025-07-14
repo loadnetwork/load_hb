@@ -14,6 +14,7 @@ pub use push_object::push_object;
 pub use retrieve_object::head_object;
 pub use retrieve_object::retrieve_object;
 pub use list_objects::list_objects;
+pub use list_objects::list_all_objects;
 
 use crate::server::S3Error;
 use aws_sdk_s3::Client;
