@@ -22,7 +22,7 @@ fn get_object(
         )
         .await;
 
-        match crate::s3::retrieve_object(&client, &bucket, &key).await {
+        match crate::s3::get_object(&client, &bucket, &key).await {
             Ok(output) => {
                 let mut result = HashMap::new();
 

@@ -1,5 +1,5 @@
 use crate::config::S3Config;
-use crate::s3::{create_bucket, get_object_with_metadata, push_object};
+use crate::s3::{create_bucket, get_object_with_metadata, put_object};
 use aws_sdk_s3::Client;
 use aws_sdk_s3::primitives::ByteStream;
 use axum::{
@@ -71,7 +71,7 @@ async fn put_object_handler(
     body: Bytes,
 ) -> Result<Response, S3Error> {
     let byte_stream = ByteStream::from(body);
-    let response = push_object(&server.client, &bucket, &key, byte_stream).await?;
+    let response = put_object(&server.client, &bucket, &key, byte_stream).await?;
 
     let headers = build_headers_with_etag(response.e_tag())?;
     Ok((StatusCode::OK, headers).into_response())

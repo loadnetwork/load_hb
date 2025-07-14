@@ -23,7 +23,7 @@ fn put_object(
         let body_vec = body.as_slice().to_vec();
         let body_stream = aws_sdk_s3::primitives::ByteStream::from(body_vec);
 
-        match crate::s3::push_object(&client, &bucket, &key, body_stream).await {
+        match crate::s3::put_object(&client, &bucket, &key, body_stream).await {
             Ok(output) => {
                 let mut result = HashMap::new();
 

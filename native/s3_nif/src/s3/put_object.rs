@@ -2,7 +2,7 @@ use aws_sdk_s3::Client;
 use aws_sdk_s3::operation::put_object::PutObjectOutput;
 use aws_sdk_s3::primitives::ByteStream;
 
-pub async fn push_object(
+pub async fn put_object(
     client: &Client,
     bucket_name: &str,
     key: &str,

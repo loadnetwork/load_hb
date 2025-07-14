@@ -1,20 +1,21 @@
 mod create_bucket;
 mod create_client;
 mod delete_object;
+mod get_object;
 mod head_bucket;
-mod push_object;
-mod retrieve_object;
+mod head_object;
 mod list_objects;
+mod put_object;
 
 pub use create_bucket::create_bucket;
 pub use create_client::create_s3_client;
 pub use delete_object::delete_object;
+pub use get_object::get_object;
 pub use head_bucket::head_bucket;
-pub use push_object::push_object;
-pub use retrieve_object::head_object;
-pub use retrieve_object::retrieve_object;
-pub use list_objects::list_objects;
+pub use head_object::head_object;
 pub use list_objects::list_all_objects;
+pub use list_objects::list_objects;
+pub use put_object::put_object;
 
 use crate::server::S3Error;
 use aws_sdk_s3::Client;
@@ -98,7 +99,7 @@ pub async fn get_object_with_metadata(
     }
 
     // Not in cache, fetch from S3
-    let response = retrieve_object(client, bucket_name, key).await?;
+    let response = get_object(client, bucket_name, key).await?;
     let etag = response.e_tag().map(|s| s.to_string());
     let bytes = response
         .body
@@ -153,7 +154,7 @@ pub async fn push_object_with_metadata(
         .map_err(|e| S3Error::Internal(e.to_string()))?;
 
     // Retrieve the object after pushing to get metadata
-    let response = retrieve_object(client, bucket_name, key).await?;
+    let response = get_object(client, bucket_name, key).await?;
     let etag = response.e_tag().map(|s| s.to_string());
     let bytes = response
         .body
