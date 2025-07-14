@@ -57,7 +57,7 @@ fn get_object(
 
                 Ok(result)
             }
-            Err(e) => Err(format!("S3 Error: {}", e)),
+            Err(e) => Err(format!("Error: {}", e)),
         }
     })
 }

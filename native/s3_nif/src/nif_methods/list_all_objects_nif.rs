@@ -44,7 +44,7 @@ pub fn list_all_objects(
 
                 Ok(result)
             }
-            Err(e) => Err(format!("Error: {}", e.to_string())),
+            Err(e) => Err(format!("Error: {}", e)),
         }
     })
 }

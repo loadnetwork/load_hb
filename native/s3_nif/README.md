@@ -56,9 +56,9 @@ async function createBucket(bucketName) {
     try {
         const command = new CreateBucketCommand({ Bucket: bucketName });
         const result = await s3Client.send(command);
-        console.log("✅ Bucket created:", result.Location || bucketName);
+        console.log("Bucket created:", result.Location || bucketName);
     } catch (error) {
-        console.error("❌ Error creating bucket:", error);
+        console.error("Error creating bucket:", error);
     }
 }
 ```

@@ -443,8 +443,20 @@ build_list_objects_xml(Bucket, S3Response) ->
     Prefix = maps:get(<<"prefix">>, S3Response, <<"">>),
     Delimiter = maps:get(<<"delimiter">>, S3Response, <<"">>),
     
-    ObjectCount = binary_to_integer(maps:get(<<"object_count">>, S3Response, <<"0">>)),
-    CommonPrefixCount = binary_to_integer(maps:get(<<"common_prefix_count">>, S3Response, <<"0">>)),
+    ObjectCount = binary_to_integer(
+        case maps:get(<<"object_count">>, S3Response, <<"0">>) of
+            ObjCountVal when is_binary(ObjCountVal) -> ObjCountVal;
+            ObjCountVal when is_list(ObjCountVal) -> list_to_binary(ObjCountVal);
+            _ -> <<"0">>
+        end
+    ),
+    CommonPrefixCount = binary_to_integer(
+        case maps:get(<<"common_prefix_count">>, S3Response, <<"0">>) of
+            PrefixCountVal when is_binary(PrefixCountVal) -> PrefixCountVal;
+            PrefixCountVal when is_list(PrefixCountVal) -> list_to_binary(PrefixCountVal);
+            _ -> <<"0">>
+        end
+    ),
     
     % Build objects XML
     ObjectsXml = case ObjectCount > 0 of

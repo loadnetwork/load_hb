@@ -71,7 +71,7 @@ pub fn list_objects(
                         let last_modified = object
                             .last_modified()
                             .map(|dt| {
-                                dt.fmt(aws_smithy_types::date_time::Format::HttpDate)
+                                dt.fmt(aws_smithy_types::date_time::Format::DateTime)
                                     .unwrap()
                             })
                             .unwrap_or_else(|| "".to_string());
@@ -129,7 +129,7 @@ pub fn list_objects(
                 Ok(result)
             }
 
-            Err(e) => Err(format!("S3 List Objects Error: {}", e.to_string())),
+            Err(e) => Err(format!("Error: {}", e)),
         }
     })
 }
