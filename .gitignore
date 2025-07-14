@@ -45,3 +45,5 @@ mkdocs-site-id.txt
 mkdocs-site-manifest.csv
 !test/admissible-report-wallet.json
 deployment.sh
+
+s3_device.config

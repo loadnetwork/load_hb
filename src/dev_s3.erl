@@ -2,6 +2,17 @@
 -export([info/1, info/3, handle/4, handle_s3_request/4]).
 -include("include/hb.hrl").
 
+load_s3_config() ->
+    case file:consult("s3_device.config") of
+        {ok, Terms} -> 
+            maps:from_list(Terms); 
+        {error, enoent} -> 
+            #{};
+        {error, Reason} -> 
+            error({s3_config_error, Reason})
+    end.
+
+
 info(_) ->
     #{
         handler => fun handle/4,
@@ -138,13 +149,15 @@ parse_s3_path(Path) ->
 %% GetObjectCommand handler
 get_object_handler(Bucket, Key, _Msg, Opts) ->
     io:format("S3 DEBUG: get_object_handler Bucket=~p Key=~p~n", [Bucket, Key]),
-    S3Config = hb_opts:get(<<"s3-config">>, #{}, Opts),
+    S3Config = load_s3_config(),
     
-    Endpoint = maps:get(<<"endpoint">>, S3Config, <<"https://s3.load.rs">>), % load network s3 cluster
-    AccessKeyId = maps:get(<<"access-key-id">>, S3Config, <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>), % cloud.load.network
-    SecretAccessKey = maps:get(<<"secret-access-key">>, S3Config, <<"">>),
-    Region = maps:get(<<"region">>, S3Config, <<"eu-west-2">>),
-    
+    Endpoint = maps:get(endpoint, S3Config),
+    AccessKeyId = maps:get(access_key_id, S3Config),
+    SecretAccessKey = maps:get(secret_access_key, S3Config),
+    Region = maps:get(region, S3Config),
+
+    io:format("S3 DEBUG: About to call NIF with args: ~p~n", 
+          [[Endpoint, AccessKeyId, SecretAccessKey, Region, Bucket, Key]]),
     io:format("S3 DEBUG: Config - Endpoint=~p, AccessKeyId=~p, Region=~p~n", [Endpoint, AccessKeyId, Region]),
     io:format("S3 DEBUG: Calling s3_nif:get_object~n"),
     % args are passed as binary
@@ -193,12 +206,12 @@ get_object_handler(Bucket, Key, _Msg, Opts) ->
 %% PutObjectCommand handler
 put_object_handler(Bucket, Key, Body, _Msg, Opts) ->
     io:format("S3 DEBUG: put_object_handler Bucket=~p Key=~p Body size=~p~n", [Bucket, Key, byte_size(Body)]),
-    S3Config = hb_opts:get(<<"s3-config">>, #{}, Opts),
+    S3Config = load_s3_config(),
     
-    Endpoint = maps:get(<<"endpoint">>, S3Config, <<"https://s3.load.rs">>),
-    AccessKeyId = maps:get(<<"access-key-id">>, S3Config, <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>),
-    SecretAccessKey = maps:get(<<"secret-access-key">>, S3Config, <<"">>),
-    Region = maps:get(<<"region">>, S3Config, <<"eu-west-2">>),
+    Endpoint = maps:get(endpoint, S3Config),
+    AccessKeyId = maps:get(access_key_id, S3Config),
+    SecretAccessKey = maps:get(secret_access_key, S3Config),
+    Region = maps:get(region, S3Config),
     
     io:format("S3 DEBUG: PUT Config - Endpoint=~p, AccessKeyId=~p, Region=~p~n", [Endpoint, AccessKeyId, Region]),
     io:format("S3 DEBUG: Calling s3_nif:put_object~n"),
@@ -235,12 +248,12 @@ put_object_handler(Bucket, Key, Body, _Msg, Opts) ->
 %% CreateBucketCommand handler
 create_bucket_handler(BucketName, _Msg, Opts) ->
     io:format("S3 DEBUG: create_bucket_handler BucketName=~p~n", [BucketName]),
-    S3Config = hb_opts:get(<<"s3-config">>, #{}, Opts),
+    S3Config = load_s3_config(),
     
-    Endpoint = maps:get(<<"endpoint">>, S3Config, <<"https://s3.load.rs">>),
-    AccessKeyId = maps:get(<<"access-key-id">>, S3Config, <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>),
-    SecretAccessKey = maps:get(<<"secret-access-key">>, S3Config, <<"">>),
-    Region = maps:get(<<"region">>, S3Config, <<"eu-west-2">>),
+    Endpoint = maps:get(endpoint, S3Config),
+    AccessKeyId = maps:get(access_key_id, S3Config),
+    SecretAccessKey = maps:get(secret_access_key, S3Config),
+    Region = maps:get(region, S3Config),
     
     io:format("S3 DEBUG: CREATE_BUCKET Config - Endpoint=~p, AccessKeyId=~p, Region=~p~n", [Endpoint, AccessKeyId, Region]),
     io:format("S3 DEBUG: Calling s3_nif:create_bucket~n"),
@@ -270,12 +283,12 @@ create_bucket_handler(BucketName, _Msg, Opts) ->
 
 head_object_handler(Bucket, Key, _Msg, Opts) ->
     io:format("S3 DEBUG: head_object_handler Bucket=~p Key=~p~n", [Bucket, Key]),
-    S3Config = hb_opts:get(<<"s3-config">>, #{}, Opts),
+    S3Config = load_s3_config(),
     
-    Endpoint = maps:get(<<"endpoint">>, S3Config, <<"https://s3.load.rs">>),
-    AccessKeyId = maps:get(<<"access-key-id">>, S3Config, <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>),
-    SecretAccessKey = maps:get(<<"secret-access-key">>, S3Config, <<"">>),
-    Region = maps:get(<<"region">>, S3Config, <<"eu-west-2">>),
+    Endpoint = maps:get(endpoint, S3Config),
+    AccessKeyId = maps:get(access_key_id, S3Config),
+    SecretAccessKey = maps:get(secret_access_key, S3Config),
+    Region = maps:get(region, S3Config),
     
     case s3_nif:head_object(Endpoint, AccessKeyId, SecretAccessKey, Region, Bucket, Key) of
         {ok, S3Response} ->
@@ -303,12 +316,12 @@ head_object_handler(Bucket, Key, _Msg, Opts) ->
 %% DeleteObjectCommand handler
 delete_object_handler(Bucket, Key, _Msg, Opts) ->
     io:format("S3 DEBUG: delete_object_handler Bucket=~p Key=~p~n", [Bucket, Key]),
-    S3Config = hb_opts:get(<<"s3-config">>, #{}, Opts),
+    S3Config = load_s3_config(),
     
-    Endpoint = maps:get(<<"endpoint">>, S3Config, <<"https://s3.load.rs">>),
-    AccessKeyId = maps:get(<<"access-key-id">>, S3Config, <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>),
-    SecretAccessKey = maps:get(<<"secret-access-key">>, S3Config, <<"">>),
-    Region = maps:get(<<"region">>, S3Config, <<"eu-west-2">>),
+    Endpoint = maps:get(endpoint, S3Config),
+    AccessKeyId = maps:get(access_key_id, S3Config),
+    SecretAccessKey = maps:get(secret_access_key, S3Config),
+    Region = maps:get(region, S3Config),
     
     io:format("S3 DEBUG: DELETE Config - Endpoint=~p, AccessKeyId=~p, Region=~p~n", [Endpoint, AccessKeyId, Region]),
     io:format("S3 DEBUG: Calling s3_nif:delete_object~n"),
@@ -337,12 +350,12 @@ delete_object_handler(Bucket, Key, _Msg, Opts) ->
 %% HeadBucketCommand handler
 head_bucket_handler(Bucket, _Msg, Opts) ->
     io:format("S3 DEBUG: head_bucket_handler Bucket=~p~n", [Bucket]),
-    S3Config = hb_opts:get(<<"s3-config">>, #{}, Opts),
+    S3Config = load_s3_config(),
     
-    Endpoint = maps:get(<<"endpoint">>, S3Config, <<"https://s3.load.rs">>),
-    AccessKeyId = maps:get(<<"access-key-id">>, S3Config, <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>),
-    SecretAccessKey = maps:get(<<"secret-access-key">>, S3Config, <<"">>),
-    Region = maps:get(<<"region">>, S3Config, <<"eu-west-2">>),
+    Endpoint = maps:get(endpoint, S3Config),
+    AccessKeyId = maps:get(access_key_id, S3Config),
+    SecretAccessKey = maps:get(secret_access_key, S3Config),
+    Region = maps:get(region, S3Config),
     
     io:format("S3 DEBUG: HEAD_BUCKET Config - Endpoint=~p, AccessKeyId=~p, Region=~p~n", [Endpoint, AccessKeyId, Region]),
     io:format("S3 DEBUG: Calling s3_nif:head_bucket~n"),
@@ -371,12 +384,12 @@ head_bucket_handler(Bucket, _Msg, Opts) ->
 %% ListObjectsCommand handler
 list_objects_handler(Bucket, Msg, Opts) ->
     io:format("S3 DEBUG: list_objects_handler Bucket=~p~n", [Bucket]),
-    S3Config = hb_opts:get(<<"s3-config">>, #{}, Opts),
+    S3Config = load_s3_config(),
     
-    Endpoint = maps:get(<<"endpoint">>, S3Config, <<"https://s3.load.rs">>),
-    AccessKeyId = maps:get(<<"access-key-id">>, S3Config, <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>),
-    SecretAccessKey = maps:get(<<"secret-access-key">>, S3Config, <<"">>),
-    Region = maps:get(<<"region">>, S3Config, <<"eu-west-2">>),
+    Endpoint = maps:get(endpoint, S3Config),
+    AccessKeyId = maps:get(access_key_id, S3Config),
+    SecretAccessKey = maps:get(secret_access_key, S3Config),
+    Region = maps:get(region, S3Config),
     
     % Extract query parameters from the message with defaults
     QueryParams = hb_ao:get(<<"query-params">>, Msg, #{}, Opts),
