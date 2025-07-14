@@ -85,8 +85,11 @@ handle_s3_request(<<"HEAD">>, Path, Msg, Opts) ->
         {object, Bucket, Key} ->
             io:format("S3 DEBUG: HEAD object, Bucket=~p, Key=~p~n", [Bucket, Key]),
             head_object_handler(Bucket, Key, Msg, Opts);
+        {bucket, Bucket} ->
+            io:format("S3 DEBUG: HEAD bucket, Bucket=~p~n", [Bucket]),
+            head_bucket_handler(Bucket, Msg, Opts);
         _ ->
-            {error, #{<<"status">> => 400, <<"body">> => <<"Invalid HEAD path - can only HEAD objects">>}}
+            {error, #{<<"status">> => 400, <<"body">> => <<"Invalid HEAD path">>}}
     end;
 
 handle_s3_request(<<"DELETE">>, Path, Msg, Opts) ->
@@ -327,5 +330,39 @@ delete_object_handler(Bucket, Key, _Msg, Opts) ->
             {error, #{
                 <<"status">> => 500,
                 <<"body">> => list_to_binary(Reason)
+            }}
+    end.
+
+%% HeadBucketCommand handler
+head_bucket_handler(Bucket, _Msg, Opts) ->
+    io:format("S3 DEBUG: head_bucket_handler Bucket=~p~n", [Bucket]),
+    S3Config = hb_opts:get(<<"s3-config">>, #{}, Opts),
+    
+    Endpoint = maps:get(<<"endpoint">>, S3Config, <<"https://s3.load.rs">>),
+    AccessKeyId = maps:get(<<"access-key-id">>, S3Config, <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>),
+    SecretAccessKey = maps:get(<<"secret-access-key">>, S3Config, <<"">>),
+    Region = maps:get(<<"region">>, S3Config, <<"eu-west-2">>),
+    
+    io:format("S3 DEBUG: HEAD_BUCKET Config - Endpoint=~p, AccessKeyId=~p, Region=~p~n", [Endpoint, AccessKeyId, Region]),
+    io:format("S3 DEBUG: Calling s3_nif:head_bucket~n"),
+    
+    case s3_nif:head_bucket(Endpoint, AccessKeyId, SecretAccessKey, Region, Bucket) of
+        {ok, S3Response} ->
+            io:format("S3 DEBUG: s3_nif head_bucket success, S3Response=~p~n", [S3Response]),
+            
+            BucketRegion = maps:get(<<"bucket_region">>, S3Response, Region),
+            AccessPointAlias = maps:get(<<"access_point_alias">>, S3Response, <<"false">>),
+            
+            {ok, #{
+                <<"status">> => 200,
+                <<"body">> => <<>>,  % HEAD responses have no body
+                <<"x-amz-bucket-region">> => BucketRegion,
+                <<"x-amz-access-point-alias">> => AccessPointAlias
+            }};
+        {error, Reason} ->
+            io:format("S3 DEBUG: s3_nif head_bucket error: ~p~n", [Reason]),
+            {error, #{
+                <<"status">> => 404,
+                <<"body">> => <<"NoSuchBucket">>
             }}
     end.
