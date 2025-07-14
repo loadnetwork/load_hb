@@ -20,7 +20,7 @@ pub fn head_bucket(
         )
         .await;
 
-        match crate::s3::head_bucket(&client, bucket).await {
+        match crate::s3::head_bucket(&client, &bucket).await {
             Ok(output) => {
                 let mut result = HashMap::new();
                 let bucket_arn = output.bucket_arn().unwrap_or("").to_string();

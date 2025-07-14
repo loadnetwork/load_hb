@@ -4,6 +4,7 @@ mod delete_object;
 mod head_bucket;
 mod push_object;
 mod retrieve_object;
+mod list_objects;
 
 pub use create_bucket::create_bucket;
 pub use create_client::create_s3_client;
@@ -12,6 +13,7 @@ pub use head_bucket::head_bucket;
 pub use push_object::push_object;
 pub use retrieve_object::head_object;
 pub use retrieve_object::retrieve_object;
+pub use list_objects::list_objects;
 
 use crate::server::S3Error;
 use aws_sdk_s3::Client;

@@ -21,7 +21,7 @@ pub fn delete_object(
         )
         .await;
 
-        match crate::s3::delete_object(&client, bucket, key).await {
+        match crate::s3::delete_object(&client, &bucket, &key).await {
             Ok(output) => {
                 let mut result = HashMap::new();
                 let delete_marker = output.delete_marker().unwrap_or(false).to_string();
