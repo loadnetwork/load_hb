@@ -13,7 +13,6 @@ pub use delete_object::delete_object;
 pub use get_object::get_object;
 pub use head_bucket::head_bucket;
 pub use head_object::head_object;
-pub use list_objects::list_all_objects;
 pub use list_objects::list_objects;
 pub use put_object::put_object;
 
