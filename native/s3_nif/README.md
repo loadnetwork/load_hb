@@ -25,6 +25,19 @@ erl -pa _build/default/lib/*/ebin
 
 1> application:ensure_all_started(hb).
 ```
+## Supported methods
+
+| Supported  | 
+| :-------------: |
+| `create_bucket`| 
+|`head_bucket`|
+| `put_object`| 
+| `get_object`|
+|`delete_object`|
+|`delete_objects`|
+|`head_object`|
+|`list_objects`|
+
 
 ## Use the ~s3@1.0 device
 

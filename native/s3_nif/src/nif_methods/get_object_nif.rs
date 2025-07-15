@@ -9,7 +9,6 @@ fn get_object(
     bucket: String,
     key: String,
 ) -> Result<HashMap<String, Vec<u8>>, String> {
-    println!("get_object called from rust nif");
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
 
     rt.block_on(async {

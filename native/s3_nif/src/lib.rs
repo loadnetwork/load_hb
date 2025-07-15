@@ -3,8 +3,8 @@ pub mod nif_methods;
 pub mod s3;
 pub mod server;
 use crate::nif_methods::{
-    create_bucket, delete_object, get_object, head_bucket, head_object, list_objects, put_object,
-    delete_objects
+    create_bucket, delete_object, delete_objects, get_cached_object, get_object, head_bucket,
+    head_object, list_objects, put_object,
 };
 
 rustler::init!(
@@ -17,6 +17,7 @@ rustler::init!(
         delete_object,
         head_bucket,
         list_objects,
-        delete_objects
+        delete_objects,
+        get_cached_object
     ]
 );
