@@ -1,5 +1,5 @@
 -module(s3_nif_test).
--export([test_get_object/0, test_put_object/0, test_create_bucket/0, test_head_object/0, test_delete_object/0, test_head_bucket/0, test_list_objects/0]).
+-export([test_get_object/0, test_put_object/0, test_create_bucket/0, test_head_object/0, test_delete_object/0, test_head_bucket/0, test_list_objects/0, test_delete_objects/0]).
 
 test_head_object() ->
     io:format("=== S3 HEAD_OBJECT NIF TEST ==="),
@@ -254,6 +254,35 @@ test_list_objects() ->
                 _ -> io:format("Next Marker: ~s~n", [NextMarker])
             end,
             
+            ok;
+        {error, Reason} ->
+            io:format("ERROR: ~p~n", [Reason]),
+            error;
+        Other ->
+            io:format("UNEXPECTED RESULT: ~p~n", [Other]),
+            unexpected
+    end.
+
+test_delete_objects() ->
+    io:format("=== S3 DELETE_OBJECTS NIF TEST ===~n"),
+     Endpoint = <<"https://s3.load.rs">>,
+     AccessKeyId = <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>,
+     SecretAccessKey = <<"">>,
+     Region = <<"eu-west-2">>,
+     Bucket = <<"darwin-1">>,
+     Keys = [<<"test.txt">>],
+
+    io:format("Testing s3_nif:delete_objects with:~n"),
+    io:format("  Cluster Endpoint: ~p~n", [Endpoint]),
+    io:format("  AccessKeyId: ~p~n", [AccessKeyId]),
+    io:format("  Bucket: ~p~n", [Bucket]),
+    io:format("  Keys: ~p~n", [Keys]),
+
+    case s3_nif:delete_objects(Endpoint, AccessKeyId, SecretAccessKey, Region, Bucket, Keys) of
+        {ok, Response} ->
+            io:format("SUCCESS: Response: ~p~n", [Response]),
+            Body = maps:get(<<"body">>, Response, <<"no body">>),
+            io:format("Body: ~p~n", [Body]),
             ok;
         {error, Reason} ->
             io:format("ERROR: ~p~n", [Reason]),

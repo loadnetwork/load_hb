@@ -1,5 +1,5 @@
 -module(s3_nif).
--export([get_object/6, put_object/7, create_bucket/5, head_object/6, delete_object/6, head_bucket/5, list_objects/9]).
+-export([get_object/6, put_object/7, create_bucket/5, head_object/6, delete_object/6, head_bucket/5, list_objects/9, delete_objects/6]).
 -on_load(init/0).
 -define(NOT_LOADED, not_loaded(?LINE)).
 
@@ -17,6 +17,10 @@ put_object(_Endpoint, AccessKeyId, _SecretAccessKey, _Region, _Bucket, _Key, _Bo
 
 -spec delete_object(string(), string(), string(), string(), string(), string()) -> {ok, map()} | {error, string()}.
 delete_object(_Endpoint, _AccessKeyId, _SecretAccessKey, _Region, _Bucket, _Key) ->
+    ?NOT_LOADED.
+
+-spec delete_objects(string(), string(), string(), string(), string(), list()) -> {ok, map()} | {error, string()}.
+delete_objects(_Endpoint, _AccessKeyId, _SecretAccessKey, _Region, _Bucket, _Keys) ->
     ?NOT_LOADED.
 
 -spec create_bucket(string(), string(), string(), string(), string()) -> {ok, map()} | {error, string()}.
