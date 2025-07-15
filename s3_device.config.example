@@ -1,0 +1,4 @@
+{endpoint, <<"https://s3.load.rs">>}.
+{access_key_id, <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>}.
+{secret_access_key, <<>>}.
+{region, <<"eu-west-2">>}.

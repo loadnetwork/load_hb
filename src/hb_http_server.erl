@@ -10,10 +10,96 @@
 %%% such that changing it on start of the router server allows for
 %%% the execution parameters of all downstream requests to be controlled.
 -module(hb_http_server).
--export([start/0, start/1, allowed_methods/2, init/2, set_opts/1, set_opts/2, get_opts/1]).
+-export([start/0, start/1, allowed_methods/2, init/2, set_opts/1, set_opts/2, get_opts/1, handle_s3_request_direct/4, build_s3_response_headers/1]).
 -export([start_node/0, start_node/1, set_default_opts/1]).
 -include_lib("eunit/include/eunit.hrl").
 -include("include/hb.hrl").
+
+
+%% @doc Handle ~s3@1.0 device requests directly, bypassing AO-Core path segmentation
+handle_s3_request_direct(Req, Body, Path, NodeMsg) ->
+    try
+        io:format("S3 DEBUG: Starting S3 request handling~n"),
+        
+        % Test each Cowboy function individually
+        Method = try cowboy_req:method(Req) catch _:_ -> <<"GET">> end,
+        io:format("S3 DEBUG: Method=~p~n", [Method]),
+        
+        ReqHeaders = try cowboy_req:headers(Req) catch _:_ -> [] end,
+        io:format("S3 DEBUG: Headers extracted~n"),
+        
+        HeadersMap = try maps:from_list(ReqHeaders) catch _:_ -> #{} end,
+        io:format("S3 DEBUG: Headers converted to map~n"),
+        
+        Query = try cowboy_req:qs(Req) catch _:_ -> <<>> end,
+        io:format("S3 DEBUG: Query=~p~n", [Query]),
+        
+        % Create a message for the ~s3@1.0 device with the full path
+        S3Msg = #{
+            <<"method">> => Method,
+            <<"path">> => Path,
+            <<"headers">> => HeadersMap,
+            <<"body">> => Body,
+            <<"query">> => Query
+        },
+        
+        io:format("S3 DEBUG: S3Msg created, calling dev_s3:handle_s3_request~n"),
+        
+        % Call the ~s3@1.0 device directly with the full path
+        case dev_s3:handle_s3_request(Method, Path, S3Msg, NodeMsg) of
+            {ok, Response} ->
+                Status = maps:get(<<"status">>, Response, 200),
+                ResponseBody = maps:get(<<"body">>, Response, <<>>),
+                ResponseHeaders = build_s3_response_headers(Response),
+                
+                io:format("S3 DEBUG: Success, Status=~p~n", [Status]),
+                {ok, cowboy_req:reply(Status, ResponseHeaders, ResponseBody, Req), no_state};
+                
+            {error, ErrorResponse} ->
+                Status = maps:get(<<"status">>, ErrorResponse, 500),
+                ErrorBody = maps:get(<<"body">>, ErrorResponse, <<"Internal Server Error">>),
+                
+                io:format("S3 DEBUG: Error, Status=~p~n", [Status]),
+                {ok, cowboy_req:reply(Status, #{
+                    <<"content-type">> => <<"text/plain">>,
+                    <<"access-control-allow-origin">> => <<"*">>
+                }, ErrorBody, Req), no_state}
+        end
+    catch
+        Type:Exception:Stacktrace ->
+            io:format("S3 DEBUG: Exception - Type:~p, Exception:~p~nStack:~p~n", [Type, Exception, Stacktrace]),
+            {ok, cowboy_req:reply(500, #{
+                <<"content-type">> => <<"text/plain">>,
+                <<"access-control-allow-origin">> => <<"*">>
+            }, <<"S3 request failed">>, Req), no_state}
+    end.
+
+
+%% @doc Build HTTP response headers from S3 response
+build_s3_response_headers(Response) ->
+    BaseHeaders = #{
+        <<"access-control-allow-origin">> => <<"*">>,
+        <<"access-control-allow-headers">> => <<"*">>,
+        <<"access-control-allow-methods">> => <<"GET, POST, PUT, DELETE, OPTIONS">>
+    },
+    
+    % Add S3 specific headers if present
+    S3Headers = maps:fold(fun
+        (<<"etag">>, ETag, Acc) when ETag =/= <<>> ->
+            Acc#{<<"etag">> => ETag};
+        (<<"last-modified">>, LastMod, Acc) when LastMod =/= <<>> ->
+            Acc#{<<"last-modified">> => LastMod};
+        (<<"content-type">>, ContentType, Acc) when ContentType =/= <<>> ->
+            Acc#{<<"content-type">> => ContentType};
+        (<<"content-length">>, ContentLength, Acc) when ContentLength =/= <<>> ->
+            Acc#{<<"content-length">> => ContentLength};
+        (<<"accept-ranges">>, AcceptRanges, Acc) when AcceptRanges =/= <<>> ->
+            Acc#{<<"accept-ranges">> => AcceptRanges};
+        (_, _, Acc) -> Acc
+    end, BaseHeaders, Response),
+    
+    S3Headers.
+
 
 %% @doc Starts the HTTP server. Optionally accepts an `Opts' message, which
 %% is used as the source for server configuration settings, as well as the
@@ -306,6 +392,87 @@ cors_reply(Req, _ServerID) ->
 %% starts by parsing the HTTP request into HyerBEAM's message format, then
 %% passing the message directly to `meta@1.0' which handles calling AO-Core in
 %% the appropriate way.
+% ORIGINAL
+
+% handle_request(RawReq, Body, ServerID) ->
+%     % Insert the start time into the request so that it can be used by the
+%     % `hb_http' module to calculate the duration of the request.
+%     StartTime = os:system_time(millisecond),
+%     Req = RawReq#{ start_time => StartTime },
+%     NodeMsg = get_opts(#{ http_server => ServerID }),
+%     case {cowboy_req:path(RawReq), cowboy_req:qs(RawReq)} of
+%         {<<"/">>, <<>>} ->
+%             % If the request is for the root path, serve a redirect to the default 
+%             % request of the node.
+%             cowboy_req:reply(
+%                 302,
+%                 #{
+%                     <<"location">> =>
+%                         hb_opts:get(
+%                             default_req,
+%                             <<"/~hyperbuddy@1.0/index">>,
+%                             NodeMsg
+%                         )
+%                 },
+%                 RawReq
+%             );
+%         <<"/logs">> ->
+%             handle_logs_request(Req, cowboy_req:parse_qs(Req), NodeMsg);
+%         <<"/logs/raw">> ->
+%             handle_logs_raw_request(Req, cowboy_req:parse_qs(Req), NodeMsg);
+%         <<"/logs/json">> ->
+%             handle_logs_json_request(Req, cowboy_req:parse_qs(Req), NodeMsg);
+%         _ ->
+%             % The request is of normal AO-Core form, so we parse it and invoke
+%             % the meta@1.0 device to handle it.
+%             ?event(http, {http_inbound, {cowboy_req, Req}, {body, {string, Body}}}),
+%             TracePID = hb_tracer:start_trace(),
+%             % Parse the HTTP request into HyerBEAM's message format.
+%             try 
+%                 ReqSingleton = hb_http:req_to_tabm_singleton(Req, Body, NodeMsg),
+%                 CommitmentCodec = hb_http:accept_to_codec(ReqSingleton, NodeMsg),
+%                 ?event(http,
+%                     {parsed_singleton,
+%                         {req_singleton, ReqSingleton},
+%                         {accept_codec, CommitmentCodec}},
+%                     #{trace => TracePID}
+%                 ),
+%                 % hb_tracer:record_step(TracePID, request_parsing),
+%                 % Invoke the meta@1.0 device to handle the request.
+%                 {ok, Res} =
+%                     dev_meta:handle(
+%                         NodeMsg#{
+%                             commitment_device => CommitmentCodec,
+%                             trace => TracePID
+%                         },
+%                         ReqSingleton
+%                     ),
+%                 hb_http:reply(Req, ReqSingleton, Res, NodeMsg)
+%             catch
+%                 Type:Details:Stacktrace ->
+%                     Trace = hb_tracer:get_trace(TracePID),
+%                     TraceString = hb_tracer:format_error_trace(Trace),
+%                     ?event(
+%                         http_error,
+%                         {http_error,
+%                             {type, Type},
+%                             {details, Details},
+%                             {stacktrace, Stacktrace}
+%                         }
+%                     ),
+%                     hb_http:reply(
+%                         Req,
+%                         #{},
+%                         #{
+%                             <<"status">> => 500,
+%                             <<"body">> => TraceString
+%                         },
+%                         NodeMsg
+%                     )
+%             end
+% end.
+
+% intercept the fn segment processing for the ~s3@1.0 device
 handle_request(RawReq, Body, ServerID) ->
     % Insert the start time into the request so that it can be used by the
     % `hb_http' module to calculate the duration of the request.
@@ -335,54 +502,62 @@ handle_request(RawReq, Body, ServerID) ->
         <<"/logs/json">> ->
             handle_logs_json_request(Req, cowboy_req:parse_qs(Req), NodeMsg);
         _ ->
-            % The request is of normal AO-Core form, so we parse it and invoke
-            % the meta@1.0 device to handle it.
-            ?event(http, {http_inbound, {cowboy_req, Req}, {body, {string, Body}}}),
-            TracePID = hb_tracer:start_trace(),
-            % Parse the HTTP request into HyerBEAM's message format.
-            try 
-                ReqSingleton = hb_http:req_to_tabm_singleton(Req, Body, NodeMsg),
-                CommitmentCodec = hb_http:accept_to_codec(ReqSingleton, NodeMsg),
-                ?event(http,
-                    {parsed_singleton,
-                        {req_singleton, ReqSingleton},
-                        {accept_codec, CommitmentCodec}},
-                    #{trace => TracePID}
-                ),
-                % hb_tracer:record_step(TracePID, request_parsing),
-                % Invoke the meta@1.0 device to handle the request.
-                {ok, Res} =
-                    dev_meta:handle(
-                        NodeMsg#{
-                            commitment_device => CommitmentCodec,
-                            trace => TracePID
-                        },
-                        ReqSingleton
-                    ),
-                hb_http:reply(Req, ReqSingleton, Res, NodeMsg)
-            catch
-                Type:Details:Stacktrace ->
-                    Trace = hb_tracer:get_trace(TracePID),
-                    TraceString = hb_tracer:format_error_trace(Trace),
-                    ?event(
-                        http_error,
-                        {http_error,
-                            {type, Type},
-                            {details, Details},
-                            {stacktrace, Stacktrace}
-                        }
-                    ),
-                    hb_http:reply(
-                        Req,
-                        #{},
-                        #{
-                            <<"status">> => 500,
-                            <<"body">> => TraceString
-                        },
-                        NodeMsg
-                    )
+            % NEW: Check for S3 paths before AO-Core processing
+            Path = cowboy_req:path(RawReq),
+            case binary:match(Path, <<"/~s3@1.0/">>) of
+                {0, _} ->
+                    % This is an S3 request - handle it directly
+                    handle_s3_request_direct(Req, Body, Path, NodeMsg);
+                nomatch ->
+                    % The request is of normal AO-Core form, so we parse it and invoke
+                    % the meta@1.0 device to handle it.
+                    ?event(http, {http_inbound, {cowboy_req, Req}, {body, {string, Body}}}),
+                    TracePID = hb_tracer:start_trace(),
+                    % Parse the HTTP request into HyerBEAM's message format.
+                    try 
+                        ReqSingleton = hb_http:req_to_tabm_singleton(Req, Body, NodeMsg),
+                        CommitmentCodec = hb_http:accept_to_codec(ReqSingleton, NodeMsg),
+                        ?event(http,
+                            {parsed_singleton,
+                                {req_singleton, ReqSingleton},
+                                {accept_codec, CommitmentCodec}},
+                            #{trace => TracePID}
+                        ),
+                        % Invoke the meta@1.0 device to handle the request.
+                        {ok, Res} =
+                            dev_meta:handle(
+                                NodeMsg#{
+                                    commitment_device => CommitmentCodec,
+                                    trace => TracePID
+                                },
+                                ReqSingleton
+                            ),
+                        hb_http:reply(Req, ReqSingleton, Res, NodeMsg)
+                    catch
+                        Type:Details:Stacktrace ->
+                            Trace = hb_tracer:get_trace(TracePID),
+                            TraceString = hb_tracer:format_error_trace(Trace),
+                            ?event(
+                                http_error,
+                                {http_error,
+                                    {type, Type},
+                                    {details, Details},
+                                    {stacktrace, Stacktrace}
+                                }
+                            ),
+                            hb_http:reply(
+                                Req,
+                                #{},
+                                #{
+                                    <<"status">> => 500,
+                                    <<"body">> => TraceString
+                                },
+                                NodeMsg
+                            )
+                    end
             end
-end.
+    end.
+
 
 handle_logs_request(Req, QS, _NodeMsg) ->
     Lines = case lists:keyfind(<<"lines">>, 1, QS) of
