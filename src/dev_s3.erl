@@ -61,6 +61,15 @@ handle(Key, Msg1, Msg2, Opts) ->
 handle_s3_request(<<"GET">>, Path, Msg, Opts) ->
     io:format("S3 DEBUG: handle_s3_request GET with Path=~p~n", [Path]),
     case parse_s3_path(Path) of
+        {cache, Bucket, Key} ->
+            io:format("S3 DEBUG: CACHE request, Bucket=~p, Key=~p~n", [Bucket, Key]),
+            FinalKey = case Key of
+                <<"">> ->
+                    QueryParams = hb_ao:get(<<"query-params">>, Msg, #{}, Opts),
+                    maps:get(<<"key">>, QueryParams, <<"">>);
+                _ -> Key
+            end,
+            get_cached_object_handler(Bucket, FinalKey, Msg, Opts);
         {object, Bucket, Key} ->
             io:format("S3 DEBUG: Parsed as object, Bucket=~p, Key=~p~n", [Bucket, Key]),
             get_object_handler(Bucket, Key, Msg, Opts);
@@ -72,6 +81,9 @@ handle_s3_request(<<"GET">>, Path, Msg, Opts) ->
             {error, #{<<"status">> => 501, <<"body">> => <<"ListBucketsCommand not implemented yet">>}};
         invalid ->
             io:format("S3 DEBUG: Invalid path~n"),
+            {error, #{<<"status">> => 400, <<"body">> => <<"Invalid S3 path">>}};
+        {error, Reason} ->
+            io:format("S3 DEBUG: Path parsing error: ~p~n", [Reason]),
             {error, #{<<"status">> => 400, <<"body">> => <<"Invalid S3 path">>}}
     end;
 
@@ -135,6 +147,20 @@ handle_s3_request(Method, _Path, _Msg, _Opts) ->
 parse_s3_path(Path) ->
     io:format("S3 DEBUG: parsing path=~p~n", [Path]),
     Result = case Path of
+        <<"/~s3@1.0/cache/", Rest/binary>> ->
+            case binary:split(Rest, <<"/">>, [global]) of
+                [<<>>] -> {error, invalid_cache_path};
+                [Bucket] when Bucket =/= <<>> -> {cache, Bucket, <<"">>};
+                [Bucket, Key] when Bucket =/= <<>>, Key =/= <<>> -> {cache, Bucket, Key};
+                [Bucket | KeyParts] when Bucket =/= <<>> ->
+                    case lists:filter(fun(Part) -> Part =/= <<>> end, KeyParts) of
+                        [] -> {cache, Bucket, <<"">>};
+                        FilteredParts ->
+                            Key = iolist_to_binary(lists:join(<<"/">>, FilteredParts)),
+                            {cache, Bucket, Key}
+                    end;
+                _ -> {error, invalid_cache_path}
+            end;
         <<"/~s3@1.0">> -> root;
         <<"/~s3@1.0/">> -> root;
         <<"/~s3@1.0/", Rest/binary>> ->
@@ -155,6 +181,35 @@ parse_s3_path(Path) ->
     end,
     io:format("S3 DEBUG: parsed result=~p~n", [Result]),
     Result.
+
+%% LRU CACHE FUNCTIONS
+get_cached_object_handler(Bucket, Key, _Msg, Opts) ->
+    S3Config = load_s3_config(),
+    
+    Endpoint = maps:get(endpoint, S3Config),
+    AccessKeyId = maps:get(access_key_id, S3Config),
+    SecretAccessKey = maps:get(secret_access_key, S3Config),
+    Region = maps:get(region, S3Config),
+    
+    case s3_nif:get_cached_object(Endpoint, AccessKeyId, SecretAccessKey, Region, Bucket, Key) of
+        {ok, S3Response} ->
+            Body = maps:get(<<"body">>, S3Response, <<>>),
+            ETag = maps:get(<<"etag">>, S3Response, <<>>),
+            
+            {ok, #{
+                <<"status">> => 200,
+                <<"body">> => Body,
+                <<"etag">> => ETag,
+                <<"content-type">> => <<"binary/octet-stream">>
+            }};
+        {error, Reason} ->
+            {error, #{
+                <<"status">> => 404,
+                <<"body">> => list_to_binary(Reason)
+            }}
+    end.
+
+%% S3 API COMPLIANT METHODS
 
 %% GetObjectCommand handler
 get_object_handler(Bucket, Key, _Msg, Opts) ->
