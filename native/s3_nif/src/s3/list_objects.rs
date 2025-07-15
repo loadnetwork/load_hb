@@ -32,4 +32,3 @@ pub async fn list_objects(
     let result = request.send().await?;
     Ok(result)
 }
-

@@ -1,6 +1,7 @@
 mod create_bucket;
 mod create_client;
 mod delete_object;
+mod delete_objects;
 mod get_object;
 mod head_bucket;
 mod head_object;
@@ -10,6 +11,7 @@ mod put_object;
 pub use create_bucket::create_bucket;
 pub use create_client::create_s3_client;
 pub use delete_object::delete_object;
+pub use delete_objects::delete_objects;
 pub use get_object::get_object;
 pub use head_bucket::head_bucket;
 pub use head_object::head_object;
