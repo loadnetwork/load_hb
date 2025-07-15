@@ -114,6 +114,16 @@ handle_s3_request(<<"DELETE">>, Path, Msg, Opts) ->
             {error, #{<<"status">> => 400, <<"body">> => <<"Invalid DELETE path - can only DELETE objects">>}}
     end;
 
+handle_s3_request(<<"POST">>, Path, Msg, Opts) ->
+    io:format("S3 DEBUG: handle_s3_request POST with Path=~p~n", [Path]),
+    case parse_s3_path(Path) of
+        {bucket, Bucket} ->
+            Body = maps:get(<<"body">>, Msg, <<>>),
+            io:format("S3 DEBUG: POST to bucket=~p, calling delete_objects_handler~n", [Bucket]),
+            delete_objects_handler(Bucket, Body, Msg, Opts);
+        _ -> 
+            {error, #{<<"status">> => 400, <<"body">> => <<"Invalid POST path">>}}
+    end;
 
 handle_s3_request(Method, _Path, _Msg, _Opts) ->
     io:format("S3 DEBUG: Unsupported method=~p~n", [Method]),
@@ -520,6 +530,129 @@ build_list_objects_xml(Bucket, S3Response) ->
         ObjectsXml,
         CommonPrefixesXml,
         <<"</ListBucketResult>">>
+    ],
+    
+    iolist_to_binary(XmlParts).
+
+%% DeleteObjectsCommand handler
+delete_objects_handler(Bucket, RequestBody, Msg, Opts) ->
+    io:format("S3 DEBUG: delete_objects_handler Bucket=~p~n", [Bucket]),
+    S3Config = load_s3_config(),
+    
+    Endpoint = maps:get(endpoint, S3Config),
+    AccessKeyId = maps:get(access_key_id, S3Config),
+    SecretAccessKey = maps:get(secret_access_key, S3Config),
+    Region = maps:get(region, S3Config),
+    
+    QueryParams = hb_ao:get(<<"query-params">>, Msg, #{}, Opts),
+    io:format("S3 DEBUG: QueryParams=~p~n", [QueryParams]),
+    
+    % Parse XML body to extract keys to delete
+    KeysToDelete = parse_delete_request_body(RequestBody),
+    
+    io:format("S3 DEBUG: DELETE_OBJECTS Config - Endpoint=~p, AccessKeyId=~p, Region=~p~n", 
+              [Endpoint, AccessKeyId, Region]),
+    io:format("S3 DEBUG: Keys to delete: ~p~n", [KeysToDelete]),
+    io:format("S3 DEBUG: Calling s3_nif:delete_objects~n"),
+    
+    case s3_nif:delete_objects(Endpoint, AccessKeyId, SecretAccessKey, Region, Bucket, KeysToDelete) of
+        {ok, S3Response} ->
+            io:format("S3 DEBUG: s3_nif delete_objects success, S3Response=~p~n", [S3Response]),
+            
+            % Build S3 XML response
+            XmlBody = build_delete_objects_xml(S3Response),
+            
+            {ok, #{
+                <<"status">> => 200,
+                <<"body">> => XmlBody,
+                <<"content-type">> => <<"application/xml">>,
+                <<"accept-ranges">> => <<"bytes">>
+            }};
+        {error, Reason} ->
+            io:format("S3 DEBUG: s3_nif delete_objects error: ~p~n", [Reason]),
+            {error, #{
+                <<"status">> => 500,
+                <<"body">> => list_to_binary(Reason)
+            }}
+    end.
+
+
+%% Helper function to parse delete request XML body
+parse_delete_request_body(Body) ->
+    % Simple regex-based extraction for now
+    case re:run(Body, <<"<Key>(.*?)</Key>">>, [global, {capture, [1], binary}]) of
+        {match, Matches} ->
+            [Key || [Key] <- Matches];
+        nomatch ->
+            []
+    end.
+
+%% Build S3-compatible XML response for DeleteObjects
+build_delete_objects_xml(S3Response) ->
+    DeletedCount = binary_to_integer(
+        case maps:get(<<"deleted_count">>, S3Response, <<"0">>) of
+            DelCountVal when is_binary(DelCountVal) -> DelCountVal;
+            DelCountVal when is_list(DelCountVal) -> list_to_binary(DelCountVal);
+            _ -> <<"0">>
+        end
+    ),
+    ErrorCount = binary_to_integer(
+        case maps:get(<<"error_count">>, S3Response, <<"0">>) of
+            ErrCountVal when is_binary(ErrCountVal) -> ErrCountVal;
+            ErrCountVal when is_list(ErrCountVal) -> list_to_binary(ErrCountVal);
+            _ -> <<"0">>
+        end
+    ),
+    
+    % Build deleted objects XML
+    DeletedXml = case DeletedCount > 0 of
+        true ->
+            lists:map(fun(I) ->
+                Key = maps:get(list_to_binary("deleted_" ++ integer_to_list(I) ++ "_key"), S3Response, <<"">>),
+                VersionId = maps:get(list_to_binary("deleted_" ++ integer_to_list(I) ++ "_version_id"), S3Response, <<"">>),
+                DeleteMarker = maps:get(list_to_binary("deleted_" ++ integer_to_list(I) ++ "_delete_marker"), S3Response, <<"false">>),
+                
+                [<<"<Deleted>">>,
+                 <<"<Key>">>, Key, <<"</Key>">>,
+                 case VersionId of
+                     <<"">> -> [];
+                     _ -> [<<"<VersionId>">>, VersionId, <<"</VersionId>">>]
+                 end,
+                 <<"<DeleteMarker>">>, DeleteMarker, <<"</DeleteMarker>">>,
+                 <<"</Deleted>">>]
+            end, lists:seq(0, DeletedCount-1));
+        false -> []
+    end,
+    
+    % Build error objects XML
+    ErrorsXml = case ErrorCount > 0 of
+        true ->
+            lists:map(fun(I) ->
+                Key = maps:get(list_to_binary("error_" ++ integer_to_list(I) ++ "_key"), S3Response, <<"">>),
+                Code = maps:get(list_to_binary("error_" ++ integer_to_list(I) ++ "_code"), S3Response, <<"">>),
+                Message = maps:get(list_to_binary("error_" ++ integer_to_list(I) ++ "_message"), S3Response, <<"">>),
+                VersionId = maps:get(list_to_binary("error_" ++ integer_to_list(I) ++ "_version_id"), S3Response, <<"">>),
+                
+                [<<"<Error>">>,
+                 <<"<Key>">>, Key, <<"</Key>">>,
+                 <<"<Code>">>, Code, <<"</Code>">>,
+                 <<"<Message>">>, Message, <<"</Message>">>,
+                 case VersionId of
+                     <<"">> -> [];
+                     _ -> [<<"<VersionId>">>, VersionId, <<"</VersionId>">>]
+                 end,
+                 <<"</Error>">>]
+            end, lists:seq(0, ErrorCount-1));
+        false -> []
+    end,
+    
+    % Build complete XML
+    XmlParts = [
+        <<"<?xml version=\"1.0\" encoding=\"UTF-8\"?>">>,
+        <<"<DeleteResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">">>,
+        DeletedXml,
+        ErrorsXml,
+        <<"</DeleteResult>">>
     ],
     
     iolist_to_binary(XmlParts).
