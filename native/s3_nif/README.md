@@ -55,7 +55,7 @@ const secretAccessKey = "";
 
 const s3Client = new S3Client({
   region: "eu-west-2",
-  endpoint: "http://localhost:10001/~s3@1.0",
+  endpoint: "http://localhost:8734/~s3@1.0",
   credentials: {
     accessKeyId,
     secretAccessKey,
@@ -84,10 +84,10 @@ The NIF implements an LRU cache with size-based eviction (in-memory). The follow
 ### 1- get cached object
 
 ```bash
-curl "http://localhost:10001/~s3@1.0/cache/BUCKET_NAME/OBJECT_KEY"
+curl "http://localhost:8734/~s3@1.0/cache/BUCKET_NAME/OBJECT_KEY"
 ```
 
-> cache vs S3 API `GetObjectCommand` : `curl "http://localhost:10001/~s3@1.0/BUCKET_NAME/OBJECT_KEY"`
+> cache vs S3 API `GetObjectCommand` : `curl "http://localhost:8734/~s3@1.0/BUCKET_NAME/OBJECT_KEY"`
 
 ## License
 This repository is licensed under the [MIT License](./LICENSE)
