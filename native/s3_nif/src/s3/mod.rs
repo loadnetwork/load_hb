@@ -2,6 +2,7 @@ mod create_bucket;
 mod create_client;
 mod delete_object;
 mod delete_objects;
+mod errors;
 mod get_object;
 mod head_bucket;
 mod head_object;
@@ -18,8 +19,8 @@ pub use head_object::head_object;
 pub use list_objects::list_objects;
 pub use put_object::put_object;
 
-use crate::server::S3Error;
 use aws_sdk_s3::Client;
+pub use errors::S3Error;
 use lru::LruCache;
 use parking_lot::RwLock;
 use std::num::NonZeroUsize;

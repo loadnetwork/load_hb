@@ -1,6 +1,8 @@
 ## About
 s3 hyperbeam device
 
+> MVP - WIP
+
 ## Setup
 
 ### 1- add s3_device.config
@@ -75,6 +77,17 @@ async function createBucket(bucketName) {
     }
 }
 ```
+
+## Cache layer
+The NIF implements an LRU cache with size-based eviction (in-memory). The following cache endpoints are available under the hyperbeam http api (intentionally not compatible with the S3 API spec):
+
+### 1- get cached object
+
+```bash
+curl "http://localhost:10001/~s3@1.0/cache/BUCKET_NAME/OBJECT_KEY"
+```
+
+> cache vs S3 API `GetObjectCommand` : `curl "http://localhost:10001/~s3@1.0/BUCKET_NAME/OBJECT_KEY"`
 
 ## License
 This repository is licensed under the [MIT License](./LICENSE)

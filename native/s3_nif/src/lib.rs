@@ -1,7 +1,6 @@
 pub mod config;
 pub mod nif_methods;
 pub mod s3;
-pub mod server;
 use crate::nif_methods::{
     create_bucket, delete_object, delete_objects, get_cached_object, get_object, head_bucket,
     head_object, list_objects, put_object,
