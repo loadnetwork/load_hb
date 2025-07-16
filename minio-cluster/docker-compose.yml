@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  minio1:
+    image: minio/minio:latest
+    hostname: minio1
+    ports:
+      - "9001:9000"
+      - "9011:9001"
+    environment:
+      - MINIO_ROOT_USER=darwin
+      - MINIO_ROOT_PASSWORD=darwin123
+    volumes:
+      - minio1_data:/data
+    command: server http://minio{1...4}/data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  minio2:
+    image: minio/minio:latest
+    hostname: minio2
+    ports:
+      - "9002:9000"
+      - "9012:9001"
+    environment:
+      - MINIO_ROOT_USER=darwin
+      - MINIO_ROOT_PASSWORD=darwin123
+    volumes:
+      - minio2_data:/data
+    command: server http://minio{1...4}/data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  minio3:
+    image: minio/minio:latest
+    hostname: minio3
+    ports:
+      - "9003:9000"
+      - "9013:9001"
+    environment:
+      - MINIO_ROOT_USER=darwin
+      - MINIO_ROOT_PASSWORD=darwin123
+    volumes:
+      - minio3_data:/data
+    command: server http://minio{1...4}/data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  minio4:
+    image: minio/minio:latest
+    hostname: minio4
+    ports:
+      - "9004:9000"
+      - "9014:9001"
+    environment:
+      - MINIO_ROOT_USER=darwin
+      - MINIO_ROOT_PASSWORD=darwin123
+    volumes:
+      - minio4_data:/data
+    command: server http://minio{1...4}/data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+volumes:
+  minio1_data:
+  minio2_data:
+  minio3_data:
+  minio4_data:

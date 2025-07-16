@@ -1,4 +1,4 @@
-{endpoint, <<"https://s3.load.rs">>}.
-{access_key_id, <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>}.
-{secret_access_key, <<>>}.
+{endpoint, <<"http://localhost:9001">>}.
+{access_key_id, <<"darwin">>}.
+{secret_access_key, <<"darwin123">>}.
 {region, <<"eu-west-2">>}.

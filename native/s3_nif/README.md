@@ -9,6 +9,8 @@ s3 hyperbeam device
 
 in the root level of the hyperbeam codebase, `touch s3_device.config` and add the creds to connect to your S3 cluster
 
+#### connecting to external s3 cluster (`./build.sh`)
+
 ```config
 {endpoint, <<"https://s3.load.rs">>}.
 {access_key_id, <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>}.
@@ -16,10 +18,21 @@ in the root level of the hyperbeam codebase, `touch s3_device.config` and add th
 {region, <<"eu-west-2">>}.
 ```
 
+#### connecting to local minio s3 cluster (`./s3_device.sh`)
+
+```config
+{endpoint, <<"http://localhost:9001">>}.
+{access_key_id, <<"darwin">>}.
+{secret_access_key, <<"darwin123">>}.
+{region, <<"eu-west-2">>}.
+```
+
 ### build and run the hyperbeam node 
 
 ```bash
-./build.sh
+./s3_device.sh # build the s3_nif device & run local minio cluster
+
+# if you want to connect to external s3 cluster, run ./build.sh instead
 
 rebar3 compile
 
@@ -27,6 +40,13 @@ erl -pa _build/default/lib/*/ebin
 
 1> application:ensure_all_started(hb).
 ```
+
+### configurting the local minio cluster
+if you choose the local minio cluster route, you can configure (set) your access key id and secret access key [here](../../minio-cluster/docker-compose.yml):
+
+- `MINO_ROOT_USER` : access key id
+- `MINIO_ROOT_PASSWORD` : secret access key
+
 ## Supported methods
 
 | Supported  | 
