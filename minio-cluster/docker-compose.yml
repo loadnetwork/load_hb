@@ -8,8 +8,8 @@ services:
       - "9001:9000"
       - "9011:9001"
     environment:
-      - MINIO_ROOT_USER=darwin
-      - MINIO_ROOT_PASSWORD=darwin123
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     volumes:
       - minio1_data:/data
     command: server http://minio{1...4}/data --console-address ":9001"
@@ -26,8 +26,8 @@ services:
       - "9002:9000"
       - "9012:9001"
     environment:
-      - MINIO_ROOT_USER=darwin
-      - MINIO_ROOT_PASSWORD=darwin123
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     volumes:
       - minio2_data:/data
     command: server http://minio{1...4}/data --console-address ":9001"
@@ -44,8 +44,8 @@ services:
       - "9003:9000"
       - "9013:9001"
     environment:
-      - MINIO_ROOT_USER=darwin
-      - MINIO_ROOT_PASSWORD=darwin123
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     volumes:
       - minio3_data:/data
     command: server http://minio{1...4}/data --console-address ":9001"
@@ -62,8 +62,8 @@ services:
       - "9004:9000"
       - "9014:9001"
     environment:
-      - MINIO_ROOT_USER=darwin
-      - MINIO_ROOT_PASSWORD=darwin123
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
     volumes:
       - minio4_data:/data
     command: server http://minio{1...4}/data --console-address ":9001"

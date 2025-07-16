@@ -22,9 +22,9 @@ in the root level of the hyperbeam codebase, `touch s3_device.config` and add th
 
 ```config
 {endpoint, <<"http://localhost:9001">>}.
-{access_key_id, <<"darwin">>}.
-{secret_access_key, <<"darwin123">>}.
-{region, <<"eu-west-2">>}.
+{access_key_id, <<"value">>}.
+{secret_access_key, <<"value">>}.
+{region, <<"value">>}.
 ```
 
 ### build and run the hyperbeam node 
@@ -42,10 +42,14 @@ erl -pa _build/default/lib/*/ebin
 ```
 
 ### configurting the local minio cluster
-if you choose the local minio cluster route, you can configure (set) your access key id and secret access key [here](../../minio-cluster/docker-compose.yml):
+if you choose the local minio cluster route, you can configure (set) your access key id and secret access key [by creating .env file here](../../minio-cluster):
 
-- `MINO_ROOT_USER` : access key id
-- `MINIO_ROOT_PASSWORD` : secret access key
+```.env
+MINIO_ROOT_USER=access_key_id
+MINIO_ROOT_PASSWORD=secret_access_key
+```
+
+> N.B: your local minio cluster access keys values should be also set equally in the `s3_device.config` config file
 
 ## Supported methods
 

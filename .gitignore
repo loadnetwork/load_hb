@@ -47,3 +47,4 @@ mkdocs-site-manifest.csv
 !test/admissible-report.json
 
 s3_device.config
+minio-cluster/.env
