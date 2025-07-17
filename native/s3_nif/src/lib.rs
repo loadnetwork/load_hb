@@ -1,4 +1,3 @@
-pub mod config;
 pub mod nif_methods;
 pub mod s3;
 use crate::nif_methods::{
