@@ -122,6 +122,30 @@ The hybdrid gateway is an extension to the `hb_gateway_client.erl` that makes it
 
 - *offchain dataitems retrieval route* : `hb_gateway_s3:read()` -> calls `dev_s3:handle_s3_request()` -> retrieve the dataitem.asn104 from the `dev_s3` bucket
 
+```mermaid
+graph TD
+    A[hb_store_gateway.erl] --> B[hb_gateway_client:read]
+    B --> C{Check Local Cache}
+    C -->|Found| D[Return Cached DataItem]
+    C -->|Not Found| E[Try Arweave Onchain]
+    E --> F{Found on Arweave?}
+    F -->|Yes| G[Return Onchain DataItem]
+    F -->|No| I[hb_gateway_s3:read]
+    I --> J[dev_s3:handle_s3_request]
+    J --> K[Get S3 dataitem.ans104 ]
+    K --> L[Return Offchain DataItem]
+    
+    classDef onchain fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
+    classDef offchain fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef config fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef decision fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    
+    class B,C,E,F,G onchain
+    class H,I,J,K,L offchain
+    class M,N,O config
+    class C,F decision
+```
+
 ### Test it
 
 #### 1- create & set the offchain bucket
