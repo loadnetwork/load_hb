@@ -145,7 +145,7 @@ graph TD
     class M,N,O config
     class C,F decision
 ```
-
+> To check the order of dataitem hits, check the commented code [here](https://github.com/loadnetwork/load_hb/blob/s3-edge/src/hb_opts.erl#L180)
 ### Test it
 
 #### 1- create & set the offchain bucket
