@@ -188,6 +188,10 @@ default_message() ->
                 %         <<"name">> => <<"cache-mainnet/lru">>
                 %     }
                 % },
+
+                % HIGHEST order, top priority for s3 objects and cache priority for built-in s3 nif LRU cache
+                % TODO: use s3_dev:get_cached_object_handler()
+                #{<<"store-module">> => hb_gateway_s3}, 
                 #{
                     <<"name">> => <<"cache-mainnet/lmdb">>,
                     <<"store-module">> => hb_store_lmdb
@@ -196,6 +200,7 @@ default_message() ->
                     <<"store-module">> => hb_store_fs,
                     <<"name">> => <<"cache-mainnet">>
                 },
+                % #{<<"store-module">> => hb_gateway_s3}, % priority order for hb nodes where offchain dataitem (s3) is priority and onchain arweave is fallback      
                 #{
                     <<"store-module">> => hb_store_gateway,
                     <<"subindex">> => [
@@ -212,6 +217,8 @@ default_message() ->
                         }
                     ]
                 },
+                % #{<<"store-module">> => hb_gateway_s3}, % order: lmdb cache, arweave + subindex, arweave - subindex, s3
+                % fits usecase where arweave cdn is priority and s3 is fallback
                 #{
                     <<"store-module">> => hb_store_gateway,
                     <<"store">> =>
@@ -221,8 +228,8 @@ default_message() ->
                                 <<"name">> => <<"cache-mainnet/lmdb">>
                             }
                         ]
-                },
-                #{<<"store-module">> => hb_gateway_s3}
+                }
+                % #{<<"store-module">> => hb_gateway_s3} % order last
             ],
         default_index => #{ <<"device">> => <<"hyperbuddy@1.0">> },
         % Should we use the latest cached state of a process when computing?
