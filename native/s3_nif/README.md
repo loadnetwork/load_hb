@@ -157,33 +157,58 @@ s3_bucket => <<"offchain-dataitems">> % you can change the name
 
 #### 2- add test data
 
-Make sure to create the `~s3@1.0` bucket as you defined the name in `hb_opts.erl` then add a fake offchain dataitem:
+Make sure to create the `~s3@1.0` bucket as you defined the name in `hb_opts.erl` then add a fake offchain dataitem. If you want to test using existing signed offchain ans-104 dataitems, checkout the [test-dataitems](../../test-dataitems/) directory and store it in your `~s3@1.0` bucket.
 
 ```bash
-# Rbb0M8_TSM0KSgBMoG-nu6TLuqWwPmdZM5V2QSUeNmM is a fake dataitem that does not exist on Arweave. Try https://arweave.net/Rbb0M8_TSM0KSgBMoG-nu6TLuqWwPmdZM5V2QSUeNmM to verify
+curl -X PUT "http://localhost:8734/~s3@1.0/offchain-dataitems/dataitems/ysAGgm6JngmOAxmaFN2YJr5t7V1JH8JGZHe1942mPbA.ans104" -H "Content-Type: application/octet-stream" --data-binary @ysAGgm6JngmOAxmaFN2YJr5t7V1JH8JGZHe1942mPbA.ans104
+```
+Otherwise, you can generate a signed valid ANS-104 dataitem using the hyperbeam erlang shell:
 
-# Add fake offchain ANS-104 dataitem to our s3 bucket
-curl -X PUT "http://localhost:8734/~s3@1.0/offchain-dataitems/dataitems/Rbb0M8_TSM0KSgBMoG-nu6TLuqWwPmdZM5V2QSUeNmM.ans104" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "id": "Rbb0M8_TSM0KSgBMoG-nu6TLuqWwPmdZM5V2QSUeNmM",
-    "data": "<html><head><title>my website</title></head><body bgcolor=\"#f5f5f5\"><table width=\"600\" align=\"center\" cellpadding=\"20\"><tr><td bgcolor=\"white\"><h2>Welcome to my site</h2><p>This is just a simple test page. Nothing fancy here.</p><p>I built this to test some stuff with hyperbeam and s3 storage.</p><hr><p><small>Last updated: July 2025</small></p></td></tr></table></body></html>",
-    "tags": [
-      {"name": "Content-Type", "value": "text/html"},
-      {"name": "Data-Protocol", "value": "ao"}
-    ],
-    "owner": "test",
-    "signature": "abc123"
-  }'
+```erlang
+1> TX = #tx{data = <<"Hello Load S3">>, tags = [{<<"Content-Type">>, <<"text/plain">>}], format = ans104}.
+2> SignedTX = ar_bundles:sign_item(TX, hb:wallet()).
+3> ANS104Binary = ar_bundles:serialize(SignedTX).
+4> DataItemID = hb_util:encode(hb_tx:id(SignedTX, signed)).
+5> file:write_file("TheDataItemId.ans104", ANS104Binary).
 
+% After that, store the dataitem on s3 as we did previously
 ```
 
 ### 3- test retrieving dataitems
 
-- offchain: http://localhost:8734/Rbb0M8_TSM0KSgBMoG-nu6TLuqWwPmdZM5V2QSUeNmM
+- offchain: http://localhost:8734/ysAGgm6JngmOAxmaFN2YJr5t7V1JH8JGZHe1942mPbA
 
 - onchain: http://localhost:8734/myb2p8_TSM0KSgBMoG-nu6TLuqWwPmdZM5V2QSUeNmM
 
- 
+#### Verify dataitem integrity
+
+```bash
+curl -I "http://localhost:8734/ysAGgm6JngmOAxmaFN2YJr5t7V1JH8JGZHe1942mPbA"
+```
+
+#### Expected Response:
+
+```bash
+HTTP/1.1 200 OK
+Content-Type: text/plain
+Data-Protocol: ao
+Device-Test: ~s3@1.0
+access-control-allow-methods: GET, POST, PUT, DELETE, OPTIONS
+access-control-allow-origin: *
+access-control-expose-headers: *
+ao-body-key: data
+ao-types: status="integer"
+content-digest: sha-256=:9WV5g4vLNkDev2JHfurtl5OE4XrCfKwjf4zE9SceHyg=:
+date: Fri, 18 Jul 2025 15:24:11 GMT
+id: ysAGgm6JngmOAxmaFN2YJr5t7V1JH8JGZHe1942mPbA
+owner: q4VxGIPsOoT2ce5OsF0eSErdxuMtFexE9tUvY_Gl1tE-w3p6YRy6REuc4t2gDFUFE233PP8l5B-db6a2IzRw8FrEc7eFeu_-sWi-FTnkh3EQ3ExE6D9VpBaocSwlPJmVXGMfC64kkxy1hrh44qpQl-RwI52IP15J5YTLWN_XOzGqPCL94VPRFQtwhiK2FQkAx1iCDCtC_FUWC9CitUnNygTUAt2X5I1oD_e9zoyWyUuEp14TLM0-JDnBzGW1t0BbZZKUw8nvmjkqyErQXOHU4AbSevp7rmb3kmi0qFEqb85flF11sHvl1ABJ9i84cmYOM4Az87Gw5beVdzIwe_1tnlUOdX42-skOuNwNPoSOOrUOXh78_meoHCWk5iwYXCnFIWOdlXl-i9Ts2MCf1Ub0v7UPeLT4mtbdhRyG6iK6nokFGHs6A5t1nce0ItGAO1wpBs_4zK3qwfxKvNwoIHpJARyBof8IKnrr28-RpkNJyhVCRvNueUusANnWNk8zIjWseNF3zLg2w_IxZKrDb7a7u1RDQGHSxDvX8mHNHZKAUcqUVeQau8pyfOcDw7hRPKLPkcoCv28ZusAeS0hibdIXA0CJ0HXzleNLIJhCBGwEmo_n1Fa1_hIEekGKnztkNwtLbhyfLtFuqbT6o_r9LdQ81glhAccc-_OJeTvG-fsYD3s
+server: Cowboy
+signature: sig-ahm9fs6tg1al3sq0w-ttpxaba2ztt2by1xnq1f4ih6w=:HGS0k2orTq+gA8t7zNx3ykTwn/lyagXlIB3yWX9AGu+yrLK1klrXo2mbySD3Kglmxw2Wyolj42CiGx4yYqAtvhN9AtS3HwVqf47E2FhmcQYk6dcfdAxaJcEz1lXncSyDAAwT7R/ecqJHHNWqOGHiP/9I9V4gCH6qz+kxXI6y/Z5Nnf9IWuJ8xv8XY37TICHlU8oPnPuLPFuvOVPCUXrzCxR6jP8JaVmx5kAHhMMC60+3CDKc3auoe9uxhMQlshnCShD1J/EzycwVqbfXV7TprqVRJoox/Z9EYdd36QKe303dgb3hO/s2aH/Z8TwLJEz6X0c9Miyt31pRQK+31Ev9QwAeXUbE48KljS/knfpTvNA0gjNIQ6xoz9paLWoHhZ+Ntzp/6fC0amzRZcXD1d5cZ5wxRUp1PUSnkexdi73adYV6UKL9pG4NRtDXpx1rP8H33qV5a7JKnTUrcg7TTuwgtieoB+ZKgAGPPtZUYsTRehSkW3gHFujpO+DsNko3UfhveXk5FpONKm2J+22LoOmLp13/yHdiRoHOIr+W/iPD7ueM3iSxtJFO68Wx6qIWp5PV0L+/trU/nHnDYxCgFNE/lZQvINeBSR8mKfE6ws1MJqoGdOC4ZdcRK11Bk75bjlWZUoz4r9JJGQgaA92xwqGzpWRQzAjGWs4rxhCib8YXLqE=:, sig-iq1nxhxgfzszd_rdcs-qwa_csljm7qwvdxmjr3mca7g=:f4/xQHH6IHbhDg3xIGKd7IRIXmwsrUd4a8XaBmKIRco=:
+signature-input: sig-ahm9fs6tg1al3sq0w-ttpxaba2ztt2by1xnq1f4ih6w=("Content-Type" "Data-Protocol" "Device-Test" "ao-body-key" "ao-types" "content-digest" "id" "owner" "signature" "signature-input" "status" "tags+link");alg="rsa-pss-sha512";keyid="q4VxGIPsOoT2ce5OsF0eSErdxuMtFexE9tUvY/Gl1tE+w3p6YRy6REuc4t2gDFUFE233PP8l5B+db6a2IzRw8FrEc7eFeu/+sWi+FTnkh3EQ3ExE6D9VpBaocSwlPJmVXGMfC64kkxy1hrh44qpQl+RwI52IP15J5YTLWN/XOzGqPCL94VPRFQtwhiK2FQkAx1iCDCtC/FUWC9CitUnNygTUAt2X5I1oD/e9zoyWyUuEp14TLM0+JDnBzGW1t0BbZZKUw8nvmjkqyErQXOHU4AbSevp7rmb3kmi0qFEqb85flF11sHvl1ABJ9i84cmYOM4Az87Gw5beVdzIwe/1tnlUOdX42+skOuNwNPoSOOrUOXh78/meoHCWk5iwYXCnFIWOdlXl+i9Ts2MCf1Ub0v7UPeLT4mtbdhRyG6iK6nokFGHs6A5t1nce0ItGAO1wpBs/4zK3qwfxKvNwoIHpJARyBof8IKnrr28+RpkNJyhVCRvNueUusANnWNk8zIjWseNF3zLg2w/IxZKrDb7a7u1RDQGHSxDvX8mHNHZKAUcqUVeQau8pyfOcDw7hRPKLPkcoCv28ZusAeS0hibdIXA0CJ0HXzleNLIJhCBGwEmo/n1Fa1/hIEekGKnztkNwtLbhyfLtFuqbT6o/r9LdQ81glhAccc+/OJeTvG+fsYD3s=", sig-iq1nxhxgfzszd_rdcs-qwa_csljm7qwvdxmjr3mca7g=("Content-Type" "Data-Protocol" "Device-Test" "ao-body-key" "ao-types" "content-digest" "id" "owner" "signature" "signature-input" "status" "tags+link");alg="hmac-sha256";keyid="ao"
+status: 200
+tags+link: 24Xx7HqIQkRzm3CtNQxfht5RbHTz12N1Ihwm1B0IIFE
+transfer-encoding: chunked
+```
+
 ## License
 This repository is licensed under the [MIT License](./LICENSE)

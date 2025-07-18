@@ -36,52 +36,37 @@ data(ID, Opts) ->
 %% @doc Parse S3-stored ANS-104 format into HyperBEAM message format
 parse_stored_ans104(Binary, Opts) ->
     try 
-        case hb_json:decode(Binary) of
-            #{<<"data">> := _, <<"tags">> := Tags} = Message ->
-                % Convert tags to direct message fields
-                % the same way fn subindex_to_tags() handles it in hb_gateway_client.erl:
-                TagFields = tags_to_message_fields(Tags),
-                {ok, maps:merge(Message, TagFields)};
-            #{<<"data">> := Data} = Message ->
-                Tags = maps:get(<<"tags">>, Message, []),
-                TagFields = tags_to_message_fields(Tags),
-                {ok, maps:merge(Message#{<<"tags">> => Tags}, TagFields)};
-            DecodedData when is_map(DecodedData) ->
-                Tags = maps:get(<<"tags">>, DecodedData, []),
-                TagFields = tags_to_message_fields(Tags),
-                BaseMessage = #{
-                    <<"data">> => maps:get(<<"data">>, DecodedData, DecodedData),
-                    <<"id">> => maps:get(<<"id">>, DecodedData, hb_util:id(Binary)),
-                    <<"tags">> => Tags,
-                    <<"owner">> => maps:get(<<"owner">>, DecodedData, <<>>),
-                    <<"signature">> => maps:get(<<"signature">>, DecodedData, <<>>)
-                },
-                {ok, maps:merge(BaseMessage, TagFields)};
-            DecodedData ->
-                {ok, #{
-                    <<"data">> => DecodedData,
-                    <<"id">> => hb_util:id(Binary),
-                    <<"tags">> => []
-                }}
+        % Deserialize as ANS-104 binary format
+        case ar_bundles:deserialize(Binary) of
+            TX when is_record(TX, tx) ->
+                % Convert TX record to HyperBEAM message format
+                {ok, tx_to_message(TX, Opts)};
+            _ ->
+                {error, invalid_ans104_format}
         end
     catch
         _:_ ->
-            {ok, #{
-                <<"data">> => Binary,
-                <<"id">> => hb_util:id(Binary),
-                <<"tags">> => []
-            }}
+            {error, failed_to_parse_ans104}
     end.
 
+%% @doc Convert TX record to HyperBEAM message format
+tx_to_message(TX, _Opts) ->
+    TagFields = tx_tags_to_message_fields(TX#tx.tags),
+    BaseMessage = #{
+        <<"data">> => TX#tx.data,
+        <<"id">> => hb_util:encode(hb_tx:id(TX, signed)),
+        <<"tags">> => TX#tx.tags,
+        <<"owner">> => hb_util:encode(TX#tx.owner),
+        <<"signature">> => hb_util:encode(TX#tx.signature)
+    },
+    maps:merge(BaseMessage, TagFields).
 
-%% @doc Convert JSON tags array to HyperBEAM message fields
-tags_to_message_fields(Tags) when is_list(Tags) ->
+%% @doc Convert TX tags to message fields
+tx_tags_to_message_fields(Tags) ->
     lists:foldl(
-        fun(#{<<"name">> := Name, <<"value">> := Value}, Acc) ->
-            Acc#{Name => Value};
-           (_, Acc) -> Acc
+        fun({Name, Value}, Acc) ->
+            Acc#{Name => Value}
         end,
         #{},
         Tags
-    );
-tags_to_message_fields(_) -> #{}.
+    ).
