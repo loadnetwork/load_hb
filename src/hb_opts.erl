@@ -221,7 +221,8 @@ default_message() ->
                                 <<"name">> => <<"cache-mainnet/lmdb">>
                             }
                         ]
-                }
+                },
+                #{<<"store-module">> => hb_gateway_s3}
             ],
         default_index => #{ <<"device">> => <<"hyperbuddy@1.0">> },
         % Should we use the latest cached state of a process when computing?
@@ -242,7 +243,9 @@ default_message() ->
         % Options for the router device
         <<"router_opts">> => #{
             routes => []
-        }
+        },
+        % The hb_gateway_s3 bucket name, storing temporal offchain ANS-104 dataitems
+        s3_bucket => <<"offchain-dataitems">>
         % Should the node track and expose prometheus metrics?
         % We do not set this explicitly, so that the hb_features:test() value
         % can be used to determine if we should expose metrics instead,

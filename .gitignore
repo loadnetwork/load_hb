@@ -48,3 +48,8 @@ mkdocs-site-manifest.csv
 
 s3_device.config
 minio-cluster/.env
+
+# wip, no need to commit yet
+gateway_s3.config
+gateway_s3.config.example
+/src/hb_store_s3.erl.txt

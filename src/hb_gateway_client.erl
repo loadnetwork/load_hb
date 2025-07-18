@@ -16,22 +16,6 @@
 
 %% @doc Get a data item (including data and tags) by its ID, using the node's
 %% GraphQL peers.
-%% It uses the following GraphQL schema:
-%% type Transaction {
-%%   id: ID!
-%%   anchor: String!
-%%   signature: String!
-%%   recipient: String!
-%%   owner: Owner { address: String! key: String! }!
-%%   fee: Amount!
-%%   quantity: Amount!
-%%   data: MetaData!
-%%   tags: [Tag { name: String! value: String! }!]!
-%% }
-%% type Amount {
-%%   winston: String!
-%%   ar: String!
-%% }
 read(ID, Opts) ->
     Query = case maps:is_key(<<"subindex">>, Opts) of
       true -> 
@@ -68,11 +52,21 @@ read(ID, Opts) ->
                 }
         }
     end,
+    % Try local cache first, then Arweave
     case query(Query, Opts) of
-        {error, Reason} -> {error, Reason};
+        {error, Reason} -> 
+            % Incase the dataitem does not exist on Arweave/cache, then fallback to the s3 temp dataitems bucket
+            case hb_gateway_s3:read(ID, Opts) of
+                {ok, S3Message} -> {ok, S3Message};
+                {error, _} -> {error, Reason}  % Return original Arweave error
+            end;
         {ok, GqlMsg} ->
             case hb_ao:get(<<"data/transactions/edges/1/node">>, GqlMsg, Opts) of
-                not_found -> {error, not_found};
+                not_found -> 
+                    case hb_gateway_s3:read(ID, Opts) of
+                        {ok, S3Message} -> {ok, S3Message};
+                        {error, _} -> {error, not_found}
+                    end;
                 Item = #{<<"id">> := ID} -> result_to_message(ID, Item, Opts)
             end
     end.
@@ -93,10 +87,7 @@ item_spec() ->
     "}">>.
 
 %% @doc Get the data associated with a transaction by its ID, using the node's
-%% Arweave `gateway' peers. The item is expected to be available in its 
-%% unmodified (by caches or other proxies) form at the following location:
-%%      https://&lt;gateway&gt;/raw/&lt;id&gt;
-%% where `&lt;id&gt;' is the base64-url-encoded transaction ID.
+%% Arweave `gateway' peers.
 data(ID, Opts) ->
     Req = #{
         <<"multirequest-accept-status">> => 200,
@@ -116,7 +107,11 @@ data(ID, Opts) ->
             {ok, hb_ao:get(<<"body">>, Res, <<>>, Opts)};
         Res ->
             ?event(gateway, {request_error, {id, ID}, {response, Res}}),
-            {error, no_viable_gateway}
+            % Fallback to retrieve dataitem Data from the s3 bucket
+            case hb_gateway_s3:data(ID, Opts) of
+                {ok, S3Data} -> {ok, S3Data};
+                {error, _} -> {error, no_viable_gateway}
+            end
     end.
 
 %% @doc Find the location of the scheduler based on its ID, through GraphQL.
