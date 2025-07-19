@@ -19,57 +19,52 @@
 -include("include/hb.hrl").
 
 %% @doc Handle ~s3@1.0 device requests directly, bypassing AO-Core path segmentation
+%% the handler function expects to extract the AccessKeyId from the request's Authorization Header
+%% then in dev_s3.erl we use the request's extracted AccessKeyId as access API KEY validated against
+%% the s3_device.config access_key_id
 handle_s3_request_direct(Req, Body, Path, NodeMsg) ->
     try
-        io:format("S3 DEBUG: Starting S3 request handling~n"),
+        Method = cowboy_req:method(Req),
+        ReqHeaders = cowboy_req:headers(Req),
+        Query = cowboy_req:qs(Req),
         
-        % Test each Cowboy function individually
-        Method = try cowboy_req:method(Req) catch _:_ -> <<"GET">> end,
-        io:format("S3 DEBUG: Method=~p~n", [Method]),
+        % Extract AccessKeyId from authorization header
+        AuthHeader = maps:get(<<"authorization">>, ReqHeaders, <<>>),
+        AccessKeyId = case binary:split(AuthHeader, <<"Credential=">>) of
+            [_, Rest] ->
+                case binary:split(Rest, <<"/">>) of
+                    [AKI | _] -> AKI;
+                    _ -> undefined
+                end;
+            _ -> undefined
+        end,
         
-        ReqHeaders = try cowboy_req:headers(Req) catch _:_ -> [] end,
-        io:format("S3 DEBUG: Headers extracted~n"),
-        
-        HeadersMap = try maps:from_list(ReqHeaders) catch _:_ -> #{} end,
-        io:format("S3 DEBUG: Headers converted to map~n"),
-        
-        Query = try cowboy_req:qs(Req) catch _:_ -> <<>> end,
-        io:format("S3 DEBUG: Query=~p~n", [Query]),
-        
-        % Create a message for the ~s3@1.0 device with the full path
         S3Msg = #{
             <<"method">> => Method,
             <<"path">> => Path,
-            <<"headers">> => HeadersMap,
+            <<"headers">> => ReqHeaders,
             <<"body">> => Body,
-            <<"query">> => Query
+            <<"query">> => Query,
+            request_access_key_id => AccessKeyId
         },
         
-        io:format("S3 DEBUG: S3Msg created, calling dev_s3:handle_s3_request~n"),
-        
-        % Call the ~s3@1.0 device directly with the full path
         case dev_s3:handle_s3_request(Method, Path, S3Msg, NodeMsg) of
             {ok, Response} ->
                 Status = maps:get(<<"status">>, Response, 200),
                 ResponseBody = maps:get(<<"body">>, Response, <<>>),
                 ResponseHeaders = build_s3_response_headers(Response),
-                
-                io:format("S3 DEBUG: Success, Status=~p~n", [Status]),
                 {ok, cowboy_req:reply(Status, ResponseHeaders, ResponseBody, Req), no_state};
-                
             {error, ErrorResponse} ->
                 Status = maps:get(<<"status">>, ErrorResponse, 500),
                 ErrorBody = maps:get(<<"body">>, ErrorResponse, <<"Internal Server Error">>),
-                
-                io:format("S3 DEBUG: Error, Status=~p~n", [Status]),
                 {ok, cowboy_req:reply(Status, #{
                     <<"content-type">> => <<"text/plain">>,
                     <<"access-control-allow-origin">> => <<"*">>
                 }, ErrorBody, Req), no_state}
         end
     catch
-        Type:Exception:Stacktrace ->
-            io:format("S3 DEBUG: Exception - Type:~p, Exception:~p~nStack:~p~n", [Type, Exception, Stacktrace]),
+        Type:Exception:_Stacktrace ->
+            io:format("Exception: ~p:~p~n", [Type, Exception]),
             {ok, cowboy_req:reply(500, #{
                 <<"content-type">> => <<"text/plain">>,
                 <<"access-control-allow-origin">> => <<"*">>

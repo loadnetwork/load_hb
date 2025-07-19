@@ -1,5 +1,6 @@
 -module(dev_s3).
 -export([info/1, info/3, handle/4, handle_s3_request/4]).
+-export([get_request_credentials/2]).
 -include("include/hb.hrl").
 
 load_s3_config() ->
@@ -12,6 +13,44 @@ load_s3_config() ->
             error({s3_config_error, Reason})
     end.
 
+%% @doc Load S3 credentials from request
+load_s3_credentials(Msg) ->
+    PreLoadedConfig = load_s3_config(),
+    io:format("S3 CREDS DEBUG: Starting credential loading (request-only mode)~n"),
+    io:format("S3 CREDS DEBUG: Message keys: ~p~n", [maps:keys(Msg)]),
+    
+    % Extract only the RequestAccessKeyId from the s3 request credentials
+    RequestAccessKeyId = maps:get(request_access_key_id, Msg, undefined),
+    % The rest of s3 configs are loaded from the s3_device.config file
+    SecretAccessKey = maps:get(secret_access_key, PreLoadedConfig, undefined),
+    Endpoint = maps:get(endpoint, PreLoadedConfig, undefined),
+    Region = maps:get(region, PreLoadedConfig, undefined),
+    PreLoadedAccessKeyId = maps:get(access_key_id, PreLoadedConfig, undefined),
+    
+    io:format("S3 CREDS DEBUG: Request AccessKeyId: ~p~n", [RequestAccessKeyId]),
+    io:format("S3 CREDS DEBUG: Config AccessKeyId: ~p~n", [PreLoadedAccessKeyId]),
+    io:format("S3 CREDS DEBUG: Config SecretAccessKey: ~p~n", [SecretAccessKey]),
+    io:format("S3 CREDS DEBUG: Config Endpoint: ~p~n", [Endpoint]),
+    io:format("S3 CREDS DEBUG: Config Region: ~p~n", [Region]),
+
+    % Validate request's access_key_id parity with the s3_device.config access_key_id
+    true = (RequestAccessKeyId =:= PreLoadedAccessKeyId andalso RequestAccessKeyId =/= undefined) orelse error({assertion_failed, invalid_access_key_id}),
+
+    % Validate that we have all creds to connect to the s3 cluster
+
+    true = (SecretAccessKey =/= undefined) orelse error({missing_credential, secret_access_key}),
+    true = (Endpoint =/= undefined) orelse error({missing_credential, endpoint}),
+    true = (Region =/= undefined) orelse error({missing_credential, region}),
+    
+    % Build credentials map using ONLY request values
+    Credentials = #{
+        endpoint => Endpoint,
+        access_key_id => RequestAccessKeyId,
+        secret_access_key => SecretAccessKey,
+        region => Region
+    },
+
+    Credentials.
 
 info(_) ->
     #{
@@ -23,7 +62,7 @@ info(_) ->
 
 info(_Msg1, _Msg2, _Opts) ->
     InfoBody = #{
-        <<"description">> => <<"S3 device - S3 compatible API + cluster connector">>,
+        <<"description">> => <<"S3 device - HyperBEAM native object storage">>,
         <<"version">> => <<"1.0">>,
         <<"paths">> => #{
             <<"info">> => <<"Get device info">>,
@@ -183,7 +222,9 @@ parse_s3_path(Path) ->
     Result.
 
 %% LRU CACHE FUNCTIONS
-get_cached_object_handler(Bucket, Key, _Msg, Opts) ->
+get_cached_object_handler(Bucket, Key, _Msg, _Opts) ->
+    % i think here for now we can keep it creds free because it reads from cache
+    % and cache object retrieval does not have AWS S3 Authorization format 
     S3Config = load_s3_config(),
     
     Endpoint = maps:get(endpoint, S3Config),
@@ -212,17 +253,15 @@ get_cached_object_handler(Bucket, Key, _Msg, Opts) ->
 %% S3 API COMPLIANT METHODS
 
 %% GetObjectCommand handler
-get_object_handler(Bucket, Key, _Msg, Opts) ->
+get_object_handler(Bucket, Key, Msg, _Opts) ->
     io:format("S3 DEBUG: get_object_handler Bucket=~p Key=~p~n", [Bucket, Key]),
-    S3Config = load_s3_config(),
+    S3Config = load_s3_credentials(Msg),
     
     Endpoint = maps:get(endpoint, S3Config),
     AccessKeyId = maps:get(access_key_id, S3Config),
     SecretAccessKey = maps:get(secret_access_key, S3Config),
     Region = maps:get(region, S3Config),
 
-    io:format("S3 DEBUG: About to call NIF with args: ~p~n", 
-          [[Endpoint, AccessKeyId, SecretAccessKey, Region, Bucket, Key]]),
     io:format("S3 DEBUG: Config - Endpoint=~p, AccessKeyId=~p, Region=~p~n", [Endpoint, AccessKeyId, Region]),
     io:format("S3 DEBUG: Calling s3_nif:get_object~n"),
     % args are passed as binary
@@ -269,9 +308,9 @@ get_object_handler(Bucket, Key, _Msg, Opts) ->
     end.
 
 %% PutObjectCommand handler
-put_object_handler(Bucket, Key, Body, _Msg, Opts) ->
+put_object_handler(Bucket, Key, Body, Msg, _Opts) ->
     io:format("S3 DEBUG: put_object_handler Bucket=~p Key=~p Body size=~p~n", [Bucket, Key, byte_size(Body)]),
-    S3Config = load_s3_config(),
+    S3Config = load_s3_credentials(Msg),
     
     Endpoint = maps:get(endpoint, S3Config),
     AccessKeyId = maps:get(access_key_id, S3Config),
@@ -311,9 +350,9 @@ put_object_handler(Bucket, Key, Body, _Msg, Opts) ->
     end.
 
 %% CreateBucketCommand handler
-create_bucket_handler(BucketName, _Msg, Opts) ->
+create_bucket_handler(BucketName, Msg, _Opts) ->
     io:format("S3 DEBUG: create_bucket_handler BucketName=~p~n", [BucketName]),
-    S3Config = load_s3_config(),
+    S3Config = load_s3_credentials(Msg),
     
     Endpoint = maps:get(endpoint, S3Config),
     AccessKeyId = maps:get(access_key_id, S3Config),
@@ -346,9 +385,9 @@ create_bucket_handler(BucketName, _Msg, Opts) ->
             }}
     end.
 
-head_object_handler(Bucket, Key, _Msg, Opts) ->
+head_object_handler(Bucket, Key, Msg, _Opts) ->
     io:format("S3 DEBUG: head_object_handler Bucket=~p Key=~p~n", [Bucket, Key]),
-    S3Config = load_s3_config(),
+    S3Config = load_s3_credentials(Msg),
     
     Endpoint = maps:get(endpoint, S3Config),
     AccessKeyId = maps:get(access_key_id, S3Config),
@@ -379,9 +418,9 @@ head_object_handler(Bucket, Key, _Msg, Opts) ->
     end.
 
 %% DeleteObjectCommand handler
-delete_object_handler(Bucket, Key, _Msg, Opts) ->
+delete_object_handler(Bucket, Key, Msg, _Opts) ->
     io:format("S3 DEBUG: delete_object_handler Bucket=~p Key=~p~n", [Bucket, Key]),
-    S3Config = load_s3_config(),
+    S3Config = load_s3_credentials(Msg),
     
     Endpoint = maps:get(endpoint, S3Config),
     AccessKeyId = maps:get(access_key_id, S3Config),
@@ -413,9 +452,9 @@ delete_object_handler(Bucket, Key, _Msg, Opts) ->
     end.
 
 %% HeadBucketCommand handler
-head_bucket_handler(Bucket, _Msg, Opts) ->
+head_bucket_handler(Bucket, Msg, _Opts) ->
     io:format("S3 DEBUG: head_bucket_handler Bucket=~p~n", [Bucket]),
-    S3Config = load_s3_config(),
+    S3Config = load_s3_credentials(Msg),
     
     Endpoint = maps:get(endpoint, S3Config),
     AccessKeyId = maps:get(access_key_id, S3Config),
@@ -449,7 +488,7 @@ head_bucket_handler(Bucket, _Msg, Opts) ->
 %% ListObjectsCommand handler
 list_objects_handler(Bucket, Msg, Opts) ->
     io:format("S3 DEBUG: list_objects_handler Bucket=~p~n", [Bucket]),
-    S3Config = load_s3_config(),
+    S3Config = load_s3_credentials(Msg),
     
     Endpoint = maps:get(endpoint, S3Config),
     AccessKeyId = maps:get(access_key_id, S3Config),
@@ -592,7 +631,7 @@ build_list_objects_xml(Bucket, S3Response) ->
 %% DeleteObjectsCommand handler
 delete_objects_handler(Bucket, RequestBody, Msg, Opts) ->
     io:format("S3 DEBUG: delete_objects_handler Bucket=~p~n", [Bucket]),
-    S3Config = load_s3_config(),
+    S3Config = load_s3_credentials(Msg),
     
     Endpoint = maps:get(endpoint, S3Config),
     AccessKeyId = maps:get(access_key_id, S3Config),
@@ -711,3 +750,110 @@ build_delete_objects_xml(S3Response) ->
     ],
     
     iolist_to_binary(XmlParts).
+
+%% @doc Extract S3 request credentials from Authorization header
+extract_aws_credentials(Headers) ->
+    case maps:get(<<"authorization">>, Headers, undefined) of
+        undefined ->
+            % Try lowercase version
+            case maps:get(<<"Authorization">>, Headers, undefined) of
+                undefined -> {error, no_auth_header};
+                AuthHeader -> parse_aws_auth_header(AuthHeader)
+            end;
+        AuthHeader ->
+            parse_aws_auth_header(AuthHeader)
+    end.
+
+%% @doc Parse AWS4-HMAC-SHA256 Authorization header
+parse_aws_auth_header(AuthHeader) ->
+    case binary:split(AuthHeader, <<" ">>, [global]) of
+        [<<"AWS4-HMAC-SHA256">>, CredentialPart, _SignedHeadersPart, _SignaturePart] ->
+            parse_aws4_credential(CredentialPart);
+        [<<"AWS">>, AccessKeyAndSignature] ->
+            % Handle older AWS signature format: AWS AccessKeyId:Signature
+            case binary:split(AccessKeyAndSignature, <<":">>) of
+                [AccessKeyId, _Signature] ->
+                    {ok, #{access_key_id => AccessKeyId, secret_access_key => undefined}};
+                _ ->
+                    {error, invalid_aws_auth_format}
+            end;
+        _ ->
+            {error, unsupported_auth_format}
+    end.
+
+%% @doc Parse AWS4 credential part: Credential=AKIAIOSFODNN7EXAMPLE/20230101/us-west-2/s3/aws4_request
+parse_aws4_credential(CredentialPart) ->
+    case binary:split(CredentialPart, <<"=">>) of
+        [<<"Credential">>, CredentialValue] ->
+            case binary:split(CredentialValue, <<"/">>) of
+                [AccessKeyId | _Rest] ->
+                    {ok, #{access_key_id => AccessKeyId, secret_access_key => undefined}};
+                _ ->
+                    {error, invalid_credential_format}
+            end;
+        _ ->
+            {error, missing_credential}
+    end.
+
+%% @doc Extract credentials from query parameters (for pre-signed URLs)
+extract_credentials_from_query(Query) ->
+    QueryParams = parse_query_string(Query),
+    case maps:get(<<"X-Amz-Credential">>, QueryParams, undefined) of
+        undefined ->
+            {error, no_credentials_in_query};
+        CredentialValue ->
+            case binary:split(CredentialValue, <<"/">>) of
+                [AccessKeyId | _Rest] ->
+                    {ok, #{access_key_id => AccessKeyId, secret_access_key => undefined}};
+                _ ->
+                    {error, invalid_query_credential_format}
+            end
+    end.
+
+%% @doc Simple query string parser
+parse_query_string(<<>>) -> #{};
+parse_query_string(Query) ->
+    Pairs = binary:split(Query, <<"&">>, [global]),
+    lists:foldl(fun(Pair, Acc) ->
+        case binary:split(Pair, <<"=">>) of
+            [Key, Value] ->
+                DecodedKey = uri_decode(Key),
+                DecodedValue = uri_decode(Value),
+                Acc#{DecodedKey => DecodedValue};
+            [Key] ->
+                Acc#{uri_decode(Key) => <<>>};
+            _ ->
+                Acc
+        end
+    end, #{}, Pairs).
+
+%% @doc Simple URI decode
+uri_decode(Bin) ->
+    uri_decode(Bin, <<>>).
+
+uri_decode(<<$%, H1, H2, Rest/binary>>, Acc) ->
+    Char = list_to_integer([H1, H2], 16),
+    uri_decode(Rest, <<Acc/binary, Char>>);
+uri_decode(<<$+, Rest/binary>>, Acc) ->
+    uri_decode(Rest, <<Acc/binary, $\s>>);
+uri_decode(<<C, Rest/binary>>, Acc) ->
+    uri_decode(Rest, <<Acc/binary, C>>);
+uri_decode(<<>>, Acc) ->
+    Acc.
+
+%% @doc Get credentials with fallback priority: Headers -> Query -> Config
+get_request_credentials(Headers, Query) ->
+    case extract_aws_credentials(Headers) of
+        {ok, #{access_key_id := AccessKeyId}} ->
+            io:format("S3 DEBUG: Extracted AccessKeyId from headers: ~p~n", [AccessKeyId]),
+            {ok, AccessKeyId, undefined}; % SecretAccessKey is not extractable from headers
+        {error, _} ->
+            case extract_credentials_from_query(Query) of
+                {ok, #{access_key_id := AccessKeyId}} ->
+                    io:format("S3 DEBUG: Extracted AccessKeyId from query: ~p~n", [AccessKeyId]),
+                    {ok, AccessKeyId, undefined};
+                {error, _} ->
+                    io:format("S3 DEBUG: No credentials in request, using config~n"),
+                    {error, no_request_credentials}
+            end
+    end.

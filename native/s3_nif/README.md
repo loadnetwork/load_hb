@@ -14,7 +14,7 @@ in the root level of the hyperbeam codebase, `touch s3_device.config` and add th
 ```config
 {endpoint, <<"https://s3.load.rs">>}.
 {access_key_id, <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>}.
-{secret_access_key, <<>>}.
+{secret_access_key, <<"your_access_key">>}.
 {region, <<"eu-west-2">>}.
 ```
 
@@ -69,13 +69,15 @@ MINIO_ROOT_PASSWORD=secret_access_key
 
 After running the hyperbeam node with the `~s3@1.0` device, you can use the `node_endpoint/~s3@1.0` url as a S3 compatible API endpoint.
 
+> ***N.B (regarding access authorization): using the `~s3@1.0` as end user (client) you only have to pass the `accessKeyId` in the request's credentials, and `secretAccessKey` value doesn't matter. This is due to the design of `~s3@1.0` access authorization where the device check's the S3 request's access_key_id of Authorization Header, and validate its parity with the access_key_id defined in `s3_device.config` -> Keep the `access_key_id` secret and use it as access API key.***
+
 ### 1- create s3 client
 
 ```js
 import { S3Client } from "@aws-sdk/client-s3";
 
-const accessKeyId = "load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ";
-const secretAccessKey = "";
+const accessKeyId = "your-access-key";
+const secretAccessKey = ""; // intentionally empty
 
 const s3Client = new S3Client({
   region: "eu-west-2",
