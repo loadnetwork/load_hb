@@ -1,6 +1,7 @@
 -module(dev_s3).
 -export([info/1, info/3, handle/4, handle_s3_request/4]).
 -export([get_request_credentials/2]).
+-export([get_object_handler/4]).
 -include("include/hb.hrl").
 
 load_s3_config() ->
@@ -253,9 +254,17 @@ get_cached_object_handler(Bucket, Key, _Msg, _Opts) ->
 %% S3 API COMPLIANT METHODS
 
 %% GetObjectCommand handler
-get_object_handler(Bucket, Key, Msg, _Opts) ->
+get_object_handler(Bucket, Key, Msg, Opts) ->
     io:format("S3 DEBUG: get_object_handler Bucket=~p Key=~p~n", [Bucket, Key]),
-    S3Config = load_s3_credentials(Msg),
+    % get_object_handler is used internally hb_gateway_s3:read() therefore
+    % we load the admin internal config directly
+    S3Config = case maps:get(internal, Opts, false) of
+        true ->
+            io:format("internal get_object_handler call"),
+            load_s3_config();
+        false ->
+            load_s3_credentials(Msg)
+    end,
     
     Endpoint = maps:get(endpoint, S3Config),
     AccessKeyId = maps:get(access_key_id, S3Config),

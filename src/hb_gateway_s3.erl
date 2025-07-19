@@ -5,17 +5,9 @@
 %% @doc Read ANS-104 DataItem from S3's `s3_bucket` using dev_s3 device
 read(ID, Opts) ->
     Bucket = hb_opts:get(s3_bucket, <<"offchain-dataitems">>, Opts),
-    Key = <<"dataitems/", ID/binary, ".ans104">>,
-    
-    % Create message for dev_s3 device to retrieve the dataitem object
-    S3Msg = #{
-        <<"method">> => <<"GET">>,
-        <<"body">> => <<>>,
-        <<"headers">> => #{},
-        <<"query">> => <<>>
-    },
-    
-    case dev_s3:handle_s3_request(<<"GET">>, <<"/~s3@1.0/", Bucket/binary, "/", Key/binary>>, S3Msg, Opts) of
+    Key = <<"dataitems/", ID/binary, ".ans104">>,    
+
+case dev_s3:get_object_handler(Bucket, Key, #{}, Opts#{internal => true}) of
         {ok, #{<<"body">> := ANS104Data, <<"status">> := 200}} ->
             parse_stored_ans104(ANS104Data, Opts);
         {error, #{<<"status">> := 404}} ->
