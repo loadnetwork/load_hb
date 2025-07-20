@@ -8,6 +8,7 @@ fn get_cached_object(
     region: String,
     bucket: String,
     key: String,
+    range: String
 ) -> Result<HashMap<String, Vec<u8>>, String> {
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
 
@@ -21,7 +22,7 @@ fn get_cached_object(
         )
         .await;
 
-        match crate::s3::get_object_with_metadata(&client, &bucket, &key).await {
+        match crate::s3::get_object_with_metadata(&client, &bucket, &key, &range).await {
             Ok(output) => {
                 let mut result = HashMap::new();
 

@@ -58,7 +58,7 @@ MINIO_ROOT_PASSWORD=secret_access_key
 | `create_bucket`| 
 |`head_bucket`|
 | `put_object`| 
-| `get_object`|
+| `get_object` (support range)|
 |`delete_object`|
 |`delete_objects`|
 |`head_object`|
@@ -108,6 +108,8 @@ async function createBucket(bucketName) {
 The NIF implements an LRU cache with size-based eviction (in-memory). The following cache endpoints are available under the hyperbeam http api (intentionally not compatible with the S3 API spec):
 
 ### 1- get cached object
+
+***Note: This endpoint requires no authentication***
 
 ```bash
 curl "http://localhost:8734/~s3@1.0/cache/BUCKET_NAME/OBJECT_KEY"
@@ -162,7 +164,10 @@ s3_bucket => <<"offchain-dataitems">> % you can change the name
 Make sure to create the `~s3@1.0` bucket as you defined the name in `hb_opts.erl` then add a fake offchain dataitem. If you want to test using existing signed offchain ans-104 dataitems, checkout the [test-dataitems](../../test-dataitems/) directory and store it in your `~s3@1.0` bucket.
 
 ```bash
-curl -X PUT "http://localhost:8734/~s3@1.0/offchain-dataitems/dataitems/ysAGgm6JngmOAxmaFN2YJr5t7V1JH8JGZHe1942mPbA.ans104" -H "Content-Type: application/octet-stream" --data-binary @ysAGgm6JngmOAxmaFN2YJr5t7V1JH8JGZHe1942mPbA.ans104
+curl -X PUT "http://localhost:8734/~s3@1.0/offchain-dataitems/dataitems/ysAGgm6JngmOAxmaFN2YJr5t7V1JH8JGZHe1942mPbA.ans104" \
+  -H "Content-Type: application/octet-stream" \
+  -H "Authorization: AWS4-HMAC-SHA256 Credential=YOUR_ACCESS_KEY_ID/20250119/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-date, Signature=dummy" \
+  --data-binary @ysAGgm6JngmOAxmaFN2YJr5t7V1JH8JGZHe1942mPbA.ans104
 ```
 Otherwise, you can generate a signed valid ANS-104 dataitem using the hyperbeam erlang shell:
 
@@ -173,7 +178,7 @@ Otherwise, you can generate a signed valid ANS-104 dataitem using the hyperbeam 
 4> DataItemID = hb_util:encode(hb_tx:id(SignedTX, signed)).
 5> file:write_file("TheDataItemId.ans104", ANS104Binary).
 
-% After that, store the dataitem on s3 as we did previously
+% After that, store the dataitem on s3 as we did previously or using the s3 sdk/client of your choice.
 ```
 
 ### 3- test retrieving dataitems

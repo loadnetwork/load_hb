@@ -227,13 +227,12 @@ get_cached_object_handler(Bucket, Key, _Msg, _Opts) ->
     % i think here for now we can keep it creds free because it reads from cache
     % and cache object retrieval does not have AWS S3 Authorization format 
     S3Config = load_s3_config(),
-    
     Endpoint = maps:get(endpoint, S3Config),
     AccessKeyId = maps:get(access_key_id, S3Config),
     SecretAccessKey = maps:get(secret_access_key, S3Config),
     Region = maps:get(region, S3Config),
-    
-    case s3_nif:get_cached_object(Endpoint, AccessKeyId, SecretAccessKey, Region, Bucket, Key) of
+    % no range
+    case s3_nif:get_cached_object(Endpoint, AccessKeyId, SecretAccessKey, Region, Bucket, Key, <<"">>) of
         {ok, S3Response} ->
             Body = maps:get(<<"body">>, S3Response, <<>>),
             ETag = maps:get(<<"etag">>, S3Response, <<>>),
@@ -265,6 +264,20 @@ get_object_handler(Bucket, Key, Msg, Opts) ->
         false ->
             load_s3_credentials(Msg)
     end,
+
+    %% Extract Range header from the message headers
+    Range = case maps:get(<<"headers">>, Msg, #{}) of
+        Headers when is_map(Headers) ->
+            case maps:get(<<"range">>, Headers, undefined) of
+                undefined ->
+                    % Try capitalized version for clients compatibility safety
+                    maps:get(<<"Range">>, Headers, <<"">>);
+                RangeValue ->
+                    RangeValue
+            end;
+        _ ->
+            <<"">>
+    end,
     
     Endpoint = maps:get(endpoint, S3Config),
     AccessKeyId = maps:get(access_key_id, S3Config),
@@ -280,7 +293,8 @@ get_object_handler(Bucket, Key, Msg, Opts) ->
         SecretAccessKey, 
         Region,          
         Bucket,          
-        Key              
+        Key,
+        Range              
     ) of
 
         {ok, S3Response} ->
