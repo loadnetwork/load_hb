@@ -57,7 +57,7 @@ MINIO_ROOT_PASSWORD=secret_access_key
 | :-------------: |
 | `create_bucket`| 
 |`head_bucket`|
-| `put_object`| 
+| `put_object` (expport `expiry: 1-365 days`)| 
 | `get_object` (support range)|
 |`delete_object`|
 |`delete_objects`|
@@ -101,6 +101,63 @@ async function createBucket(bucketName) {
     } catch (error) {
         console.error("Error creating bucket:", error);
     }
+}
+```
+
+### 3- get object (with range)
+
+
+```js
+async function getObject(bucketName, key) {
+  try {
+    console.log(`Getting object: ${bucketName}/${key}`);
+
+    const command = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      Range: "bytes=-1",
+    });
+
+    const result = await s3Client.send(command);
+
+    const bodyContents = await result.Body.transformToString();
+
+    console.log("Object retrieved successfully!");
+    console.log("Content:", bodyContents);
+    console.log("Metadata:", {
+      ContentType: result.ContentType,
+      ContentLength: result.ContentLength,
+      ETag: result.ETag,
+      LastModified: result.LastModified,
+    });
+
+    return result;
+  } catch (error) {
+    console.error("Error getting object:", error.name, error.message);
+    throw error;
+  }
+}
+```
+
+### 4- put object (with expiry)
+```js
+async function PutObject(bucketName, fileName, body, expiryDays) {
+  try {
+    const command = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: fileName,
+      Body: body,
+      Metadata: {
+        "expiry-days": expiryDays.toString(),
+      },
+    });
+
+    const result = await s3Client.send(command);
+    console.log("Object created:", fileName, "with expiry:", expiryDays);
+    return result;
+  } catch (error) {
+    console.error("Error creating object", error);
+  }
 }
 ```
 

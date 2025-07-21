@@ -8,7 +8,7 @@ fn get_object(
     region: String,
     bucket: String,
     key: String,
-    range: String
+    range: String,
 ) -> Result<HashMap<String, Vec<u8>>, String> {
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
 

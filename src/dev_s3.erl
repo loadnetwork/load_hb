@@ -334,13 +334,27 @@ get_object_handler(Bucket, Key, Msg, Opts) ->
 put_object_handler(Bucket, Key, Body, Msg, _Opts) ->
     io:format("S3 DEBUG: put_object_handler Bucket=~p Key=~p Body size=~p~n", [Bucket, Key, byte_size(Body)]),
     S3Config = load_s3_credentials(Msg),
-    
+
+    ExpiryDays = case maps:get(<<"headers">>, Msg, #{}) of
+        Headers when is_map(Headers) ->
+            ExpiryBinary = case maps:get(<<"x-amz-meta-expiry-days">>, Headers, undefined) of
+                undefined -> <<"0">>;
+                Value -> Value
+            end,
+            io:format("S3 DEBUG: Extracted expiry binary: ~p~n", [ExpiryBinary]),
+            try binary_to_integer(ExpiryBinary)
+            catch _:_ -> 0
+            end;
+        _ ->
+            0
+    end,
+
     Endpoint = maps:get(endpoint, S3Config),
     AccessKeyId = maps:get(access_key_id, S3Config),
     SecretAccessKey = maps:get(secret_access_key, S3Config),
     Region = maps:get(region, S3Config),
     
-    io:format("S3 DEBUG: PUT Config - Endpoint=~p, AccessKeyId=~p, Region=~p~n", [Endpoint, AccessKeyId, Region]),
+    io:format("S3 DEBUG: PUT Config - Endpoint=~p, AccessKeyId=~p, Region=~p, Expiry=~p~n", [Endpoint, AccessKeyId, Region, ExpiryDays]),
     io:format("S3 DEBUG: Calling s3_nif:put_object~n"),
     
     case s3_nif:put_object(
@@ -350,7 +364,8 @@ put_object_handler(Bucket, Key, Body, Msg, _Opts) ->
         Region,          
         Bucket,          
         Key,
-        Body             % The request body
+        Body,
+        ExpiryDays       
     ) of
         {ok, S3Response} ->
             io:format("S3 DEBUG: s3_nif put_object success, S3Response=~p~n", [S3Response]),

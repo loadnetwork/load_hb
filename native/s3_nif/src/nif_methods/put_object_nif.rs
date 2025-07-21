@@ -9,6 +9,7 @@ fn put_object(
     bucket: String,
     key: String,
     body: rustler::Binary,
+    expiry_days: i32,
 ) -> Result<HashMap<String, Vec<u8>>, String> {
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
     rt.block_on(async {
@@ -23,7 +24,7 @@ fn put_object(
         let body_vec = body.as_slice().to_vec();
         let body_stream = aws_sdk_s3::primitives::ByteStream::from(body_vec);
 
-        match crate::s3::put_object(&client, &bucket, &key, body_stream).await {
+        match crate::s3::put_object(&client, &bucket, &key, body_stream, expiry_days).await {
             Ok(output) => {
                 let mut result = HashMap::new();
 

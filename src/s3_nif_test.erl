@@ -71,6 +71,7 @@ test_put_object() ->
      Bucket = <<"darwin-1">>,
      Key = list_to_binary(integer_to_list(erlang:system_time(second))), % unique binary object name,
      Data = list_to_binary("hello world"),
+     Expiry = 0,
 
     io:format("Testing s3_nif:put_object with:~n"),
     io:format("  Cluster Endpoint: ~p~n", [Endpoint]),
@@ -78,6 +79,7 @@ test_put_object() ->
     io:format("  Bucket: ~p~n", [Bucket]),
     io:format("  Key: ~p~n", [Key]),
     io:format("  Data: ~p~n", [Data]),
+    io:format("  Expiry: ~p~n", [Expiry]),
 
     case s3_nif:put_object(Endpoint, AccessKeyId, SecretAccessKey, Region, Bucket, Key, Data) of
         {ok, Response} ->

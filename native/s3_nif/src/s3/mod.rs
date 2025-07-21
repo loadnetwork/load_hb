@@ -8,6 +8,7 @@ mod head_bucket;
 mod head_object;
 mod list_objects;
 mod put_object;
+mod put_object_expiry;
 
 pub use create_bucket::create_bucket;
 pub use create_client::create_s3_client;
@@ -18,12 +19,16 @@ pub use head_bucket::head_bucket;
 pub use head_object::head_object;
 pub use list_objects::list_objects;
 pub use put_object::put_object;
+pub use put_object_expiry::put_object_expiry;
 
 use aws_sdk_s3::Client;
 pub use errors::S3Error;
 use lru::LruCache;
 use parking_lot::RwLock;
 use std::num::NonZeroUsize;
+
+pub const MIN_OBJECT_EXPIRY_DAYS: i32 = 1;
+pub const MAX_OBJECT_EXPIRY_DAYS: i32 = 365;
 
 // Cache entry with size tracking
 #[derive(Clone)]
@@ -89,7 +94,7 @@ pub async fn get_object_with_metadata(
     client: &Client,
     bucket_name: &str,
     key: &str,
-    range: &str
+    range: &str,
 ) -> Result<(Vec<u8>, Option<String>), S3Error> {
     let cache_key = format!("{}:{}", bucket_name, key);
 
@@ -125,49 +130,3 @@ pub async fn get_object_with_metadata(
 
     Ok((data, etag))
 }
-
-// pub async fn push_object_with_metadata(
-//     client: &Client,
-//     bucket_name: &str,
-//     key: &str,
-//     file_data: impl AsRef<[u8]>,
-//     file_content_type: Option<&str>,
-//     create_bucket_if_does_not_exist: bool,
-// ) -> Result<(Vec<u8>, Option<String>), S3Error> {
-//     // Create bucket if requested and it doesn't exist
-//     if create_bucket_if_does_not_exist {
-//         if let Err(_) = create_bucket(client, bucket_name).await {
-//             // Bucket might already exist, continue
-//         }
-//     }
-
-//     // Push the object first
-//     let body =
-//         aws_sdk_s3::primitives::ByteStream::from(bytes::Bytes::copy_from_slice(file_data.as_ref()));
-
-//     let mut put_request = client.put_object().bucket(bucket_name).key(key).body(body);
-
-//     if let Some(content_type) = file_content_type {
-//         put_request = put_request.content_type(content_type);
-//     }
-
-//     put_request
-//         .send()
-//         .await
-//         .map_err(|e| S3Error::Internal(e.to_string()))?;
-
-//     // Retrieve the object after pushing to get metadata
-//     let response = get_object(client, bucket_name, key, range).await?;
-//     let etag = response.e_tag().map(|s| s.to_string());
-//     let bytes = response
-//         .body
-//         .collect()
-//         .await
-//         .map_err(|e| S3Error::Internal(e.to_string()))?;
-
-//     let data = bytes.into_bytes().to_vec();
-
-//     // Note: We don't add to cache here as requested
-
-//     Ok((data, etag))
-// }
