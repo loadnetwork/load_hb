@@ -1,10 +1,14 @@
 -module(s3_nif).
--export([get_object/7, put_object/8, create_bucket/5, head_object/6, delete_object/6, head_bucket/5, list_objects/9, delete_objects/6, get_cached_object/7]).
+-export([get_object/7, presigned_get_object/7, put_object/8, create_bucket/5, head_object/6, delete_object/6, head_bucket/5, list_objects/9, delete_objects/6, get_cached_object/7]).
 -on_load(init/0).
 -define(NOT_LOADED, not_loaded(?LINE)).
 
 -spec get_object(string(), string(), string(), string(), string(), string(), string()) -> {ok, map()} | {error, string()}.
 get_object(_Endpoint, _AccessKeyId, _SecretAccessKey, _Region, _Bucket, _Key, _Range) ->
+    ?NOT_LOADED.
+
+-spec presigned_get_object(string(), string(), string(), string(), string(), string(), integer()) -> {ok, map()} | {error, string()}.
+presigned_get_object(_Endpoint, _AccessKeyId, _SecretAccessKey, _Region, _Bucket, _Key, _Duration) ->
     ?NOT_LOADED.
 
 -spec head_object(string(), string(), string(), string(), string(), string()) -> {ok, map()} | {error, string()}.

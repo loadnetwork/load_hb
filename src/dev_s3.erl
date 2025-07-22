@@ -25,6 +25,7 @@ load_s3_credentials(Msg) ->
     % The rest of s3 configs are loaded from the s3_device.config file
     SecretAccessKey = maps:get(secret_access_key, PreLoadedConfig, undefined),
     Endpoint = maps:get(endpoint, PreLoadedConfig, undefined),
+    PublicEndpoint = maps:get(public_endpoint, PreLoadedConfig, undefined),
     Region = maps:get(region, PreLoadedConfig, undefined),
     PreLoadedAccessKeyId = maps:get(access_key_id, PreLoadedConfig, undefined),
     
@@ -32,6 +33,7 @@ load_s3_credentials(Msg) ->
     io:format("S3 CREDS DEBUG: Config AccessKeyId: ~p~n", [PreLoadedAccessKeyId]),
     io:format("S3 CREDS DEBUG: Config SecretAccessKey: ~p~n", [SecretAccessKey]),
     io:format("S3 CREDS DEBUG: Config Endpoint: ~p~n", [Endpoint]),
+    io:format("S3 CREDS DEBUG: Config Endpoint: ~p~n", [PublicEndpoint]),
     io:format("S3 CREDS DEBUG: Config Region: ~p~n", [Region]),
 
     % Validate request's access_key_id parity with the s3_device.config access_key_id
@@ -41,11 +43,12 @@ load_s3_credentials(Msg) ->
 
     true = (SecretAccessKey =/= undefined) orelse error({missing_credential, secret_access_key}),
     true = (Endpoint =/= undefined) orelse error({missing_credential, endpoint}),
+    true = (PublicEndpoint =/= undefined) orelse error({missing_credential, public_endpoint}),
     true = (Region =/= undefined) orelse error({missing_credential, region}),
     
-    % Build credentials map using ONLY request values
     Credentials = #{
         endpoint => Endpoint,
+        public_endpoint => PublicEndpoint,
         access_key_id => RequestAccessKeyId,
         secret_access_key => SecretAccessKey,
         region => Region
@@ -169,6 +172,9 @@ handle_s3_request(<<"DELETE">>, Path, Msg, Opts) ->
 handle_s3_request(<<"POST">>, Path, Msg, Opts) ->
     io:format("S3 DEBUG: handle_s3_request POST with Path=~p~n", [Path]),
     case parse_s3_path(Path) of
+        get_presigned ->
+            io:format("S3 DEBUG: GET_PRESIGNED request~n"),
+            get_presigned_url_handler(Msg, Opts);
         {bucket, Bucket} ->
             Body = maps:get(<<"body">>, Msg, <<>>),
             io:format("S3 DEBUG: POST to bucket=~p, calling delete_objects_handler~n", [Bucket]),
@@ -176,6 +182,7 @@ handle_s3_request(<<"POST">>, Path, Msg, Opts) ->
         _ -> 
             {error, #{<<"status">> => 400, <<"body">> => <<"Invalid POST path">>}}
     end;
+
 
 handle_s3_request(Method, _Path, _Msg, _Opts) ->
     io:format("S3 DEBUG: Unsupported method=~p~n", [Method]),
@@ -187,6 +194,7 @@ handle_s3_request(Method, _Path, _Msg, _Opts) ->
 parse_s3_path(Path) ->
     io:format("S3 DEBUG: parsing path=~p~n", [Path]),
     Result = case Path of
+        <<"/~s3@1.0/get-presigned">> -> get_presigned;
         <<"/~s3@1.0/cache/", Rest/binary>> ->
             case binary:split(Rest, <<"/">>, [global]) of
                 [<<>>] -> {error, invalid_cache_path};
@@ -249,6 +257,56 @@ get_cached_object_handler(Bucket, Key, _Msg, _Opts) ->
                 <<"body">> => list_to_binary(Reason)
             }}
     end.
+
+%% Presigned URLs functionalities
+get_presigned_url_handler(Msg, _Opts) ->
+    io:format("S3 DEBUG: get_presigned_url_handler~n"),
+        S3Config = load_s3_credentials(Msg),
+    
+    Body = maps:get(<<"body">>, Msg, <<"{}">>),
+    io:format("S3 DEBUG: Raw body: ~p~n", [Body]),
+    
+    try hb_json:decode(Body) of
+        Params when is_map(Params) ->
+            io:format("S3 DEBUG: Parsed params: ~p~n", [Params]),
+            Bucket = maps:get(<<"bucket">>, Params, <<"">>),
+            Key = maps:get(<<"key">>, Params, <<"">>),
+            Duration = maps:get(<<"duration">>, Params, 3600),
+            
+            io:format("S3 DEBUG: Extracted - Bucket=~p, Key=~p, Duration=~p~n", [Bucket, Key, Duration]),
+            
+            Endpoint = maps:get(endpoint, S3Config),
+            PublicEndpoint = maps:get(public_endpoint, S3Config),
+            AccessKeyId = maps:get(access_key_id, S3Config),
+            SecretAccessKey = maps:get(secret_access_key, S3Config),
+            Region = maps:get(region, S3Config),
+            
+            io:format("S3 DEBUG: Calling s3_nif:presigned_get_object~n"),
+            
+            case s3_nif:presigned_get_object(Endpoint, AccessKeyId, SecretAccessKey, Region, Bucket, Key, Duration) of
+                {ok, PresignedUrl} ->
+                    io:format("S3 DEBUG: Success! PresignedUrl=~p~n", [PresignedUrl]),
+                    % replace the internal endpoint with public endpoint so the user can properly use it
+                    % in the case where the developer is using locally spawned MinIO cluster.
+                    PublicUrl = binary:replace(PresignedUrl, Endpoint, PublicEndpoint, [global]),
+                    {ok, #{
+                        <<"status">> => 200,
+                        <<"body">> => PublicUrl,
+                        <<"content-type">> => <<"text/plain">>
+                    }};
+                {error, Reason} ->
+                    io:format("S3 DEBUG: NIF error: ~p~n", [Reason]),
+                    {error, #{<<"status">> => 500, <<"body">> => list_to_binary(Reason)}}
+            end;
+        Other ->
+            io:format("S3 DEBUG: JSON decode returned non-map: ~p~n", [Other]),
+            {error, #{<<"status">> => 400, <<"body">> => <<"Invalid JSON format">>}}
+    catch 
+        Error:Reason ->
+            io:format("S3 DEBUG: JSON decode failed - Error=~p, Reason=~p~n", [Error, Reason]),
+            {error, #{<<"status">> => 400, <<"body">> => <<"Invalid JSON">>}}
+    end.
+
 
 %% S3 API COMPLIANT METHODS
 

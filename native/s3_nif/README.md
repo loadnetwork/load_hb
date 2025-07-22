@@ -13,6 +13,7 @@ in the root level of the hyperbeam codebase, `touch s3_device.config` and add th
 
 ```config
 {endpoint, <<"https://s3.load.rs">>}.
+{public_endpoint, <<"https://s3.load.rs">>}.
 {access_key_id, <<"load_acc_XLrIyYcF6vdwr9tiug2wrLRSuSPmtucZ">>}.
 {secret_access_key, <<"your_access_key">>}.
 {region, <<"eu-west-2">>}.
@@ -21,7 +22,8 @@ in the root level of the hyperbeam codebase, `touch s3_device.config` and add th
 #### connecting to local minio s3 cluster (`./s3_device.sh`)
 
 ```config
-{endpoint, <<"http://localhost:9001">>}.
+{endpoint, "http://localhost:9001"}.% Internal MinIO - dev
+{public_endpoint, "https://your.hyperbeam-s3-cluster-endpoint.com"}. % Public-facing URL, used for presigned URLs
 {access_key_id, <<"value">>}.
 {secret_access_key, <<"value">>}.
 {region, <<"value">>}.
@@ -160,6 +162,13 @@ async function PutObject(bucketName, fileName, body, expiryDays) {
   }
 }
 ```
+### 5- Generate presigned get_object url
+
+```bash
+curl -X POST http://localhost:8734/~s3@1.0/get-presigned -H "Content-Type: application/json" -H "Authorization: AWS4-HMAC-SHA256 Credential=YOUR-ACCESS-KEY-ID/20230101/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-date, Signature=dummy" -d '{"bucket": "BUCKET-NAME", "key": "OBJECT-KEY", "duration": DURATION_IN_SECONS}' # 1s-7days
+```
+
+The returned URL uses the preset `public_endpoint` (in `s3_device.config`) as base url.
 
 ## Cache layer
 The NIF implements an LRU cache with size-based eviction (in-memory). The following cache endpoints are available under the hyperbeam http api (intentionally not compatible with the S3 API spec):
