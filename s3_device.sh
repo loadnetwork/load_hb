@@ -19,3 +19,7 @@ cd ..
 # build the nif crate
 echo "[*] building s3_nif device"
 ./build.sh
+
+# start the hyperbeam service (server related config)
+# echo "[*] starting hyperbeam server"
+# rebar3 shell

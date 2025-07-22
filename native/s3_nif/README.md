@@ -57,8 +57,8 @@ MINIO_ROOT_PASSWORD=secret_access_key
 | :-------------: |
 | `create_bucket`| 
 |`head_bucket`|
-| `put_object` (expport `expiry: 1-365 days`)| 
-| `get_object` (support range)|
+| `put_object` (support `expiry: 1-365 days`)| 
+| `get_object` (support `range`)|
 |`delete_object`|
 |`delete_objects`|
 |`head_object`|
