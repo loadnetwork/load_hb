@@ -592,8 +592,11 @@ list_objects_handler(Bucket, Msg, Opts) ->
     Region = maps:get(region, S3Config),
     
     % Extract query parameters from the message with defaults
-    QueryParams = hb_ao:get(<<"query-params">>, Msg, #{}, Opts),
-    
+    RawQuery = maps:get(<<"query">>, Msg, <<"">>),
+    QueryParams = parse_query_string(RawQuery),
+
+    io:format("S3 DEBUG: Parsed QueryParams: ~p~n", [QueryParams]),
+
     Prefix = maps:get(<<"prefix">>, QueryParams, <<"">>),
     Delimiter = maps:get(<<"delimiter">>, QueryParams, <<"">>),
     Marker = maps:get(<<"marker">>, QueryParams, <<"">>),
