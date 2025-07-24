@@ -348,6 +348,10 @@ read(Path, Opts) ->
             {ok, Res}
     end.
 
+% During tests to get the offchain dataitems accessible for dev_lua.erl
+% read(Path, Opts) ->
+%     store_read(Path, hb_opts:get(store, no_viable_store, Opts), Opts).
+
 %% @doc List all of the subpaths of a given path and return a map of keys and
 %% links to the subpaths, including their types.
 store_read(_Path, no_viable_store, _) ->

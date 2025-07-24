@@ -97,7 +97,7 @@ default_message() ->
             #{<<"name">> => <<"s3@1.0">>, <<"module">> => dev_s3}
         ],
         %% Default execution cache control options
-        cache_control => [<<"no-cache">>, <<"no-store">>],
+        cache_control => [<<"always">>],
         cache_lookup_hueristics => false,
         % Should we await in-progress executions, rather than re-running?
         % Has three settings: false, only `named' executions, or all executions.
@@ -188,7 +188,6 @@ default_message() ->
                 %         <<"name">> => <<"cache-mainnet/lru">>
                 %     }
                 % },
-                #{<<"store-module">> => hb_gateway_s3}, % <- priority order: ~s3@1.0 -> Arweave's cache -> Arweave
                 #{
                     <<"name">> => <<"cache-mainnet/lmdb">>,
                     <<"store-module">> => hb_store_lmdb
@@ -197,7 +196,6 @@ default_message() ->
                     <<"store-module">> => hb_store_fs,
                     <<"name">> => <<"cache-mainnet">>
                 },
-                % #{<<"store-module">> => hb_gateway_s3}, % <- priority order: Arweave's cache ->  ~s3@1.0 -> Arweave     
                 #{
                     <<"store-module">> => hb_store_gateway,
                     <<"subindex">> => [
@@ -214,7 +212,6 @@ default_message() ->
                         }
                     ]
                 },
-                % #{<<"store-module">> => hb_gateway_s3}, % <- priority order: Arweave's cache -> Arweave -> ~s3@1.0 
                 #{
                     <<"store-module">> => hb_store_gateway,
                     <<"store">> =>
@@ -224,7 +221,8 @@ default_message() ->
                                 <<"name">> => <<"cache-mainnet/lmdb">>
                             }
                         ]
-                }
+                },
+                #{<<"store-module">> => hb_gateway_s3} % <- last fallback
             ],
         default_index => #{ <<"device">> => <<"hyperbuddy@1.0">> },
         % Should we use the latest cached state of a process when computing?

@@ -901,6 +901,17 @@ error_execution(ExecGroup, Msg2, Whence, {Class, Exception, Stacktrace}, Opts) -
 %% requested by the `Opts'. If the result is a literal, we wrap it in a message
 %% and signal the location of the result inside. We also similarly handle ao-result
 %% when the result is a single value and an explicit status code.
+%% ORIGINAL
+% maybe_force_message({Status, Res}, Opts) ->
+%     case hb_opts:get(force_message, false, Opts) of
+%         true -> force_message({Status, Res}, Opts);
+%         false -> {Status, Res}
+%     end.
+
+% New
+maybe_force_message(ok, Opts) ->
+    % Handle the case where device function returns just 'ok' instead of {ok, Result}
+    maybe_force_message({ok, ok}, Opts);
 maybe_force_message({Status, Res}, Opts) ->
     case hb_opts:get(force_message, false, Opts) of
         true -> force_message({Status, Res}, Opts);

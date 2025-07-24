@@ -1,0 +1,5 @@
+** These dataitems are stored offchain, on the s3@1.0 cluster **
+
+- test/test.lua : jDlqJpinHyE9k_21w8ZBBpfUSeukdTRJAGRC1HKzGPs.ans104
+- test/aos-2-pure.wasm : USXf_mR3rQIWNThGuKBv1UlkOD1EIGDa9wCLGzMyv6E.ans104
+- test/lua_device_token.lua : EijdV3U1GDRlcrDn4vNpozZcF4ld62gwPQQJQ0Q6Cz0

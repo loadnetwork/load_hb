@@ -11,7 +11,7 @@ case dev_s3:get_object_handler(Bucket, Key, #{}, Opts#{internal => true}) of
         {ok, #{<<"body">> := ANS104Data, <<"status">> := 200}} ->
             parse_stored_ans104(ANS104Data, Opts);
         {error, #{<<"status">> := 404}} ->
-            {error, not_found};
+            not_found;
         {error, Reason} ->
             {error, Reason}
     end.

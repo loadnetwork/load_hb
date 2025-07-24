@@ -1,7 +1,8 @@
 -module(dev_s3).
 -export([info/1, info/3, handle/4, handle_s3_request/4]).
 -export([get_request_credentials/2]).
--export([get_object_handler/4]).
+-export([get_object_handler/4, put_object_handler/5, list_objects_handler/3]).
+-export([load_s3_config/0]).
 -include("include/hb.hrl").
 
 load_s3_config() ->
@@ -582,7 +583,7 @@ head_bucket_handler(Bucket, Msg, _Opts) ->
     end.
 
 %% ListObjectsCommand handler
-list_objects_handler(Bucket, Msg, Opts) ->
+list_objects_handler(Bucket, Msg, _Opts) ->
     io:format("S3 DEBUG: list_objects_handler Bucket=~p~n", [Bucket]),
     S3Config = load_s3_credentials(Msg),
     

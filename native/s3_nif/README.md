@@ -238,11 +238,12 @@ curl -X PUT "http://localhost:8734/~s3@1.0/offchain-dataitems/dataitems/ysAGgm6J
 Otherwise, you can generate a signed valid ANS-104 dataitem using the hyperbeam erlang shell:
 
 ```erlang
-1> TX = #tx{data = <<"Hello Load S3">>, tags = [{<<"Content-Type">>, <<"text/plain">>}], format = ans104}.
-2> SignedTX = ar_bundles:sign_item(TX, hb:wallet()).
-3> ANS104Binary = ar_bundles:serialize(SignedTX).
-4> DataItemID = hb_util:encode(hb_tx:id(SignedTX, signed)).
-5> file:write_file("TheDataItemId.ans104", ANS104Binary).
+1> rr("src/ar_tx.erl").  % load tx record definition
+2> TX = #tx{data = <<"Hello Load S3">>, tags = [{<<"Content-Type">>, <<"text/plain">>}], format = ans104}.
+3> SignedTX = ar_bundles:sign_item(TX, hb:wallet()).
+4> ANS104Binary = ar_bundles:serialize(SignedTX).
+5> DataItemID = hb_util:encode(hb_tx:id(SignedTX, signed)).
+6> file:write_file("TheDataItemId.ans104", ANS104Binary).
 
 % After that, store the dataitem on s3 as we did previously or using the s3 sdk/client of your choice.
 ```
