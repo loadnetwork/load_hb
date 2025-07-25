@@ -255,7 +255,11 @@ reset(Modules) -> call_function(Modules, reset, []).
 
 %% @doc Get the type of element of a given path in the store. This can be
 %% a performance killer if the store is remote etc. Use only when necessary.
-type(Modules, Path) -> call_function(Modules, type, [Path]).
+type(Modules, Path) -> 
+    io:format("STORE TYPE DEBUG: Calling type with modules: ~p, path: ~p~n", [Modules, Path]),
+    Result = call_function(Modules, type, [Path]),
+    io:format("STORE TYPE DEBUG: type result: ~p~n", [Result]),
+    Result.
 
 %% @doc Create a path from a list of path components. If no store implements
 %% the path function, we return the path with the 'default' transformation (id).
@@ -298,12 +302,28 @@ do_call_function(X, _Function, _Args) when not is_list(X) ->
 do_call_function([], _Function, _Args) ->
     not_found;
 do_call_function([Store = #{<<"store-module">> := Mod} | Rest], Function, Args) ->
+    io:format("STORE DEBUG: Trying store ~p for function ~p~n", [Mod, Function]),
     try apply_store_function(Mod, Store, Function, Args) of
         not_found ->
+            io:format("STORE DEBUG: Store ~p returned not_found for ~p~n", [Mod, Function]),
             do_call_function(Rest, Function, Args);
         Result ->
+            io:format("STORE DEBUG: Store ~p succeeded for ~p with result ~p~n", [Mod, Function, Result]),
             Result
-    catch _:_:_ -> do_call_function(Rest, Function, Args)
+    catch Class:Reason:Stacktrace -> 
+        io:format("STORE DEBUG: Store ~p CRASHED for ~p - Class: ~p, Reason: ~p~n", [Mod, Function, Class, Reason]),
+        io:format("STORE DEBUG: Stacktrace: ~p~n", [Stacktrace]),
+        ?event(error, 
+            {store_crashed, 
+                {module, Mod}, 
+                {function, Function}, 
+                {store_config, Store},
+                {class, Class}, 
+                {reason, Reason}, 
+                {stacktrace, Stacktrace}
+            }
+        ),
+        do_call_function(Rest, Function, Args)
     end.
 
 %% @doc Apply a store function, checking if the store returns a retry request or

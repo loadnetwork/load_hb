@@ -712,7 +712,10 @@ find_server(ProcID, Msg1, ToSched, Opts) ->
                     ?event({sched_loc, SchedLoc}),
                     case SchedLoc of
                         not_found ->
-                            {error, <<"No scheduler information provided.">>};
+                            % No scheduler information provided - default to local scheduling
+                            % This prevents the system from trying to fetch scheduler metadata from S3
+                            ?event({no_scheduler_info_defaulting_to_local, ProcID}),
+                            {local, dev_scheduler_registry:find(ProcID, Proc, Opts)};
                         _ ->
                             ?event(
                                 {confirming_if_scheduler_is_local,
@@ -899,22 +902,39 @@ slot(M1, M2, Opts) ->
         {local, PID} ->
             ?event({getting_current_slot, {proc_id, ProcID}}),
             {Timestamp, Hash, Height} = ar_timestamp:get(),
-            #{ current := CurrentSlot, wallets := Wallets } =
-                dev_scheduler_server:info(PID),
-            {ok, #{
-                <<"process">> => ProcID,
-                <<"current">> => CurrentSlot,
-                <<"timestamp">> => Timestamp,
-                <<"block-height">> => Height,
-                <<"block-hash">> => Hash,
-                <<"cache-control">> => <<"no-store">>,
-                <<"addresses">> => lists:map(fun hb_util:human_id/1, Wallets)
-            }};
+            try
+                #{ current := CurrentSlot, wallets := Wallets } =
+                    dev_scheduler_server:info(PID),
+                {ok, #{
+                    <<"process">> => ProcID,
+                    <<"current">> => CurrentSlot,
+                    <<"timestamp">> => Timestamp,
+                    <<"block-height">> => Height,
+                    <<"block-hash">> => Hash,
+                    <<"cache-control">> => <<"no-store">>,
+                    <<"addresses">> => lists:map(fun hb_util:human_id/1, Wallets)
+                }}
+            catch
+                error:{badmatch, {error, Reason}} ->
+                    {error, #{
+                        <<"status">> => 500,
+                        <<"reason">> => <<"Scheduler server error">>,
+                        <<"details">> => Reason
+                    }};
+                error:Reason ->
+                    {error, #{
+                        <<"status">> => 500,
+                        <<"reason">> => <<"Failed to get scheduler info">>,
+                        <<"details">> => hb_util:bin(Reason)
+                    }}
+            end;
         {redirect, Redirect} ->
             case hb_opts:get(scheduler_follow_redirects, true, Opts) of
                 false -> {ok, Redirect};
                 true -> remote_slot(ProcID, Redirect, Opts)
-            end
+            end;
+        {error, Error} ->
+            {error, Error}
     end.
 
 %% @doc Get the current slot from a remote scheduler.

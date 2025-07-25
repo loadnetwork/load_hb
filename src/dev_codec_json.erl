@@ -15,13 +15,27 @@ to(Msg, _Req, _Opts) ->
     {
         ok,
         hb_util:bin(
+            % hotfix
             json:encode(
-                hb_private:reset(
-                    hb_cache:ensure_all_loaded(Msg)
+                normalize_for_json(
+                    hb_private:reset(
+                        hb_cache:ensure_all_loaded(Msg)
+                    )
                 )
             )
         )
     }.
+
+%% @doc Normalize data structures for JSON encoding by converting tuples to maps/lists
+normalize_for_json(Data) when is_map(Data) ->
+    maps:map(fun(_, V) -> normalize_for_json(V) end, Data);
+normalize_for_json(Data) when is_list(Data) ->
+    lists:map(fun normalize_for_json/1, Data);
+normalize_for_json({Key, Value}) when is_binary(Key) ->
+    % Convert header tuples like {<<"Content-Type">>, <<"text/plain">>} to maps
+    #{Key => normalize_for_json(Value)};
+normalize_for_json(Data) ->
+    Data.
 
 %% @doc Decode a JSON string to a message.
 from(Map, _Req, _Opts) when is_map(Map) -> {ok, Map};

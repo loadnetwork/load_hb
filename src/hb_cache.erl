@@ -339,7 +339,10 @@ write_binary(Hashpath, Bin, Store, Opts) ->
 %% @doc Read the message at a path. Returns in `structured@1.0' format: Either a
 %% richly typed map or a direct binary.
 read(Path, Opts) ->
-    case store_read(Path, hb_opts:get(store, no_viable_store, Opts), Opts) of
+    io:format("CACHE DEBUG: hb_cache:read called with path: ~p, opts keys: ~p~n", [Path, maps:keys(Opts)]),
+    Store = hb_opts:get(store, no_viable_store, Opts),
+    io:format("CACHE DEBUG: hb_opts:get(store) returned: ~p~n", [Store]),
+    case store_read(Path, Store, Opts) of
         not_found -> not_found;
         {ok, Res} ->
             %?event({applying_types_to_read_message, Res}),
@@ -357,12 +360,14 @@ read(Path, Opts) ->
 store_read(_Path, no_viable_store, _) ->
     not_found;
 store_read(Path, Store, Opts) ->
+    io:format("CACHE DEBUG: store_read called with store: ~p~n", [Store]),
     ResolvedFullPath = hb_store:resolve(Store, PathBin = hb_path:to_binary(Path)),
     ?event({read_resolved,
         {original_path, {string, PathBin}},
         {resolved_path, ResolvedFullPath},
         {store, Store}
     }),
+    io:format("CACHE DEBUG: About to call hb_store:type with store: ~p, path: ~p~n", [Store, ResolvedFullPath]),
     case hb_store:type(Store, ResolvedFullPath) of
         not_found -> not_found;
         simple ->
