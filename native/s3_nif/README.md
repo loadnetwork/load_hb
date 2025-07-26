@@ -215,11 +215,10 @@ graph TD
     class M,N,O config
     class C,F decision
 ```
-> To check the order of dataitem hits, check the commented code [here](https://github.com/loadnetwork/load_hb/blob/s3-edge/src/hb_opts.erl#L180)
 ### Test it
 
 #### 1- create & set the offchain bucket
-Make hyperbeam aware of the `dev_s3` bucket that is storing your ANS-104 offchain dataiems, here [../../src/hb_opts.erl] (`s3_bucket` in `default_message`)
+Make hyperbeam aware of the `dev_s3` bucket that is storing your ANS-104 offchain dataiems, [here](../../src/hb_opts.erl) (`s3_bucket` in `default_message`)
 
 ```erlang
 s3_bucket => <<"offchain-dataitems">> % you can change the name
@@ -283,6 +282,8 @@ status: 200
 tags+link: 24Xx7HqIQkRzm3CtNQxfht5RbHTz12N1Ihwm1B0IIFE
 transfer-encoding: chunked
 ```
+
+For more examples & ao processes interactions, check the [test-dataitems](../../test-dataitems/) directory
 
 ## License
 This repository is licensed under the [MIT License](./LICENSE)

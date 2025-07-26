@@ -42,7 +42,7 @@ file:write_file("TheDataItemId.ans104", ANS104Binary).
 
 ## upload it to ~s3@1.0
 
-N.B to change `YOUR_ACCESS_KEY`
+N.B to change `YOUR_ACCESS_KEY_ID`
 
 ```bash
 curl -X PUT "http://localhost:8734/~s3@1.0/offchain-dataitems/dataitems/TheDataItemId.ans104" \

@@ -1,4 +1,5 @@
 ** These dataitems are stored offchain, on the s3@1.0 cluster **
+- test-dataitems/test-lua53a.md : EijdV3U1GDRlcrDn4vNpozZcF4ld62gwPQQJQ0Q6Cz0
 - test-dataitems/test-process.md : Mg6LKY1H4NbDdUc47_OT_d6DISmldk7HdO04wW9GoMM
 - test/test.lua : jDlqJpinHyE9k_21w8ZBBpfUSeukdTRJAGRC1HKzGPs
 - test/aos-2-pure.wasm : USXf_mR3rQIWNThGuKBv1UlkOD1EIGDa9wCLGzMyv6E
