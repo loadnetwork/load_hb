@@ -53,3 +53,6 @@ minio-cluster/.env
 gateway_s3.config
 gateway_s3.config.example
 /genesis-wasm-server
+
+darwin-wallet.json
+test-dataitems/aojs/node_modules/
