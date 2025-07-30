@@ -34,6 +34,12 @@ normalize_for_json(Data) when is_list(Data) ->
 normalize_for_json({Key, Value}) when is_binary(Key) ->
     % Convert header tuples like {<<"Content-Type">>, <<"text/plain">>} to maps
     #{Key => normalize_for_json(Value)};
+normalize_for_json(Data) when is_binary(Data) ->
+    case unicode:characters_to_binary(Data, utf8, utf8) of
+        Data -> Data;  % Valid UTF-8, keep as is
+        _ -> binary_to_list(Data)  % Invalid UTF-8, return byte array list
+    end;
+
 normalize_for_json(Data) ->
     Data.
 
