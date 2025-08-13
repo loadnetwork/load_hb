@@ -202,6 +202,10 @@ default_message() ->
                         #{
                             <<"name">> => <<"Data-Protocol">>,
                             <<"value">> => <<"ao">>
+                        },
+                        #{
+                            <<"name">> => <<"Data-Protocol">>,
+                            <<"value">> => <<"Load-S3">>
                         }
                     ],
                     <<"store">> => 
