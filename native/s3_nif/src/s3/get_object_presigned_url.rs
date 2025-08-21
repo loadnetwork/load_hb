@@ -1,7 +1,7 @@
+use crate::s3::{MAX_PRESIGNED_URL_DURATION, MIN_PRESIGNED_URL_DURATION, WHITELISTED_READ_BUCKETS};
 use aws_sdk_s3::Client;
 use aws_sdk_s3::presigning::PresigningConfig;
 use aws_smithy_types::error::operation::BuildError;
-use crate::s3::{MIN_PRESIGNED_URL_DURATION, MAX_PRESIGNED_URL_DURATION};
 use std::time::Duration;
 
 pub async fn generate_get_presigned_url(
@@ -10,10 +10,19 @@ pub async fn generate_get_presigned_url(
     key: &str,
     duration: u64,
 ) -> Result<String, aws_sdk_s3::Error> {
-
     if duration < MIN_PRESIGNED_URL_DURATION || duration > MAX_PRESIGNED_URL_DURATION {
-        let err = BuildError::other(format!("Error: presigned url duration should be between {}s & {}s", MIN_PRESIGNED_URL_DURATION, MAX_PRESIGNED_URL_DURATION));
-        return Err(aws_sdk_s3::Error::from(err))
+        let err = BuildError::other(format!(
+            "Error: presigned url duration should be between {}s & {}s",
+            MIN_PRESIGNED_URL_DURATION, MAX_PRESIGNED_URL_DURATION
+        ));
+        return Err(aws_sdk_s3::Error::from(err));
+    }
+
+    if !WHITELISTED_READ_BUCKETS.contains(&bucket) {
+        let err = BuildError::other(format!(
+            "Error: {bucket} is not whitelisted for unauthed read access"
+        ));
+        return Err(aws_sdk_s3::Error::from(err));
     }
 
     let request = client.get_object().bucket(bucket).key(key);

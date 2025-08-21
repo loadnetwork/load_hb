@@ -1,3 +1,4 @@
+use crate::s3::WHITELISTED_READ_BUCKETS;
 use std::collections::HashMap;
 
 #[rustler::nif(schedule = "DirtyCpu")]
@@ -22,6 +23,11 @@ fn get_cached_object(
         )
         .await;
 
+        if !WHITELISTED_READ_BUCKETS.contains(&bucket.as_str()) {
+            return Err(format!(
+                "Error: {bucket} is not whitelisted for unauthed read access"
+            ));
+        }
         match crate::s3::get_object_with_metadata(&client, &bucket, &key, &range).await {
             Ok(output) => {
                 let mut result = HashMap::new();

@@ -33,7 +33,7 @@ pub const MIN_OBJECT_EXPIRY_DAYS: i32 = 1;
 pub const MAX_OBJECT_EXPIRY_DAYS: i32 = 365;
 pub const MIN_PRESIGNED_URL_DURATION: u64 = 1; //  1 sec
 pub const MAX_PRESIGNED_URL_DURATION: u64 = 7 * 24 * 3600; // 7 days
-
+pub const WHITELISTED_READ_BUCKETS: &[&str] = &["offchain-dataitems"];
 
 // Cache entry with size tracking
 #[derive(Clone)]
