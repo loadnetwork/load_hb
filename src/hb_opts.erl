@@ -97,13 +97,7 @@ default_message() ->
             #{<<"name">> => <<"s3@1.0">>, <<"module">> => dev_s3}
         ],
         %% Default execution cache control options
-        %% In this S3 HyperBEAM node, we focus on 
-        %% Load S3 - Arweave DataItems cross reading
-        %% Therefore fast data access is prioritized 
-        %% over execution cache control default options
-        % cache_control => [<<"always">>],
-        cache_control => [<<"never">>],
-        % cache_lookup_hueristics => false,
+        cache_control => [<<"always">>],
         cache_lookup_hueristics => false,
         % Should we await in-progress executions, rather than re-running?
         % Has three settings: false, only `named' executions, or all executions.
@@ -183,67 +177,67 @@ default_message() ->
                     }
             }
         ],
-        % store =>
-        %     [
-        %         % #{
-        %         %     <<"name">> => <<"cache-mainnet/lru">>,
-        %         %     <<"capacity">> => 512 * 1024 * 1024,
-        %         %     <<"store-module">> => hb_store_lru,
-        %         %     <<"persistent-store">> => #{
-        %         %         <<"store-module">> => hb_store_fs,
-        %         %         <<"name">> => <<"cache-mainnet/lru">>
-        %         %     }
-        %         % },
-        %         #{<<"store-module">> => hb_gateway_s3}, % <- last fallback
-        %         % #{
-        %         %     <<"name">> => <<"cache-mainnet/lmdb">>,
-        %         %     <<"store-module">> => hb_store_lmdb
-        %         % },
-        %         % #{
-        %         %     <<"store-module">> => hb_store_fs,
-        %         %     <<"name">> => <<"cache-mainnet">>
-        %         % },
-        %         #{
-        %             <<"store-module">> => hb_store_gateway,
-        %             <<"subindex">> => [
-        %                 #{
-        %                     <<"name">> => <<"Data-Protocol">>,
-        %                     <<"value">> => <<"ao">>
-        %                 },
-        %                 #{
-        %                     <<"name">> => <<"Data-Protocol">>,
-        %                     <<"value">> => <<"Load-S3">>
-        %                 }
-        %             ],
-        %             <<"store">> => 
-        %             [
-        %                 #{
-        %                     <<"store-module">> => hb_store_lmdb,
-        %                     <<"name">> => <<"cache-mainnet/lmdb">>
-        %                 }
-        %             ]
-        %         },
-        %         #{
-        %             <<"store-module">> => hb_store_gateway,
-        %             <<"store">> =>
-        %                 [
-        %                     #{
-        %                         <<"store-module">> => hb_store_lmdb,
-        %                         <<"name">> => <<"cache-mainnet/lmdb">>
-        %                     }
-        %                 ]
-        %         }
-        %         % #{<<"store-module">> => hb_gateway_s3} % <- last fallback
-        %     ],
         store =>
             [
-                #{<<"store-module">> => hb_gateway_s3},
-                #{<<"store-module">> => hb_store_gateway},
+                % #{
+                %     <<"name">> => <<"cache-mainnet/lru">>,
+                %     <<"capacity">> => 512 * 1024 * 1024,
+                %     <<"store-module">> => hb_store_lru,
+                %     <<"persistent-store">> => #{
+                %         <<"store-module">> => hb_store_fs,
+                %         <<"name">> => <<"cache-mainnet/lru">>
+                %     }
+                % },
+                #{
+                    <<"name">> => <<"cache-mainnet/lmdb">>,
+                    <<"store-module">> => hb_store_lmdb
+                },
                 #{
                     <<"store-module">> => hb_store_fs,
-                    <<"name">> => <<"minimal-cache">>
-                }
+                    <<"name">> => <<"cache-mainnet">>
+                },
+                #{
+                    <<"store-module">> => hb_store_gateway,
+                    <<"subindex">> => [
+                        #{
+                            <<"name">> => <<"Data-Protocol">>,
+                            <<"value">> => <<"ao">>
+                        },
+                        #{
+                            <<"name">> => <<"Data-Protocol">>,
+                            <<"value">> => <<"Load-S3">>
+                        }
+                    ],
+                    <<"store">> => 
+                    [
+                        #{
+                            <<"store-module">> => hb_store_lmdb,
+                            <<"name">> => <<"cache-mainnet/lmdb">>
+                        }
+                    ]
+                },
+                #{
+                    <<"store-module">> => hb_store_gateway,
+                    <<"store">> =>
+                        [
+                            #{
+                                <<"store-module">> => hb_store_lmdb,
+                                <<"name">> => <<"cache-mainnet/lmdb">>
+                            }
+                        ]
+                },
+                #{<<"store-module">> => hb_gateway_s3} % <- last fallback
             ],
+
+        % store =>
+        %     [
+        %         #{<<"store-module">> => hb_gateway_s3},
+        %         #{<<"store-module">> => hb_store_gateway},
+        %         #{
+        %             <<"store-module">> => hb_store_fs,
+        %             <<"name">> => <<"minimal-cache">>
+        %         }
+        %     ],
         default_index => #{ <<"device">> => <<"hyperbuddy@1.0">> },
         % Should we use the latest cached state of a process when computing?
         process_now_from_cache => false,
@@ -254,7 +248,7 @@ default_message() ->
         http_extra_opts =>
             #{
                 force_message => true,
-                cache_control => [<<"never">>] % cache disabeled for perf
+                cache_control => [<<"always">>]
             },
         % Should the node store all signed messages?
         store_all_signed => true,
