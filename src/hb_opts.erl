@@ -188,6 +188,7 @@ default_message() ->
                 %         <<"name">> => <<"cache-mainnet/lru">>
                 %     }
                 % },
+                #{<<"store-module">> => hb_gateway_s3}, % <- last fallback
                 #{
                     <<"name">> => <<"cache-mainnet/lmdb">>,
                     <<"store-module">> => hb_store_lmdb
@@ -225,8 +226,8 @@ default_message() ->
                                 <<"name">> => <<"cache-mainnet/lmdb">>
                             }
                         ]
-                },
-                #{<<"store-module">> => hb_gateway_s3} % <- last fallback
+                }
+                % #{<<"store-module">> => hb_gateway_s3} % <- last fallback
             ],
         default_index => #{ <<"device">> => <<"hyperbuddy@1.0">> },
         % Should we use the latest cached state of a process when computing?
