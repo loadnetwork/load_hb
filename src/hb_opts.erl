@@ -97,7 +97,7 @@ default_message() ->
             #{<<"name">> => <<"s3@1.0">>, <<"module">> => dev_s3}
         ],
         %% Default execution cache control options
-        cache_control => [<<"always">>],
+        cache_control => [<<"never">>],
         cache_lookup_hueristics => false,
         % Should we await in-progress executions, rather than re-running?
         % Has three settings: false, only `named' executions, or all executions.
@@ -177,8 +177,8 @@ default_message() ->
                     }
             }
         ],
-        store =>
-            [
+        % store =>
+        %     [
                 % #{
                 %     <<"name">> => <<"cache-mainnet/lru">>,
                 %     <<"capacity">> => 512 * 1024 * 1024,
@@ -188,56 +188,56 @@ default_message() ->
                 %         <<"name">> => <<"cache-mainnet/lru">>
                 %     }
                 % },
-                #{
-                    <<"name">> => <<"cache-mainnet/lmdb">>,
-                    <<"store-module">> => hb_store_lmdb
-                },
+                % #{
+            %         <<"name">> => <<"cache-mainnet/lmdb">>,
+            %         <<"store-module">> => hb_store_lmdb
+            %     },
+            %     #{<<"store-module">> => hb_gateway_s3}, % <- last fallback
+            %     #{
+            %         <<"store-module">> => hb_store_fs,
+            %         <<"name">> => <<"cache-mainnet">>
+            %     },
+            %     #{
+            %         <<"store-module">> => hb_store_gateway,
+            %         <<"subindex">> => [
+            %             #{
+            %                 <<"name">> => <<"Data-Protocol">>,
+            %                 <<"value">> => <<"ao">>
+            %             },
+            %             #{
+            %                 <<"name">> => <<"Data-Protocol">>,
+            %                 <<"value">> => <<"Load-S3">>
+            %             }
+            %         ],
+            %         <<"store">> => 
+            %         [
+            %             #{
+            %                 <<"store-module">> => hb_store_lmdb,
+            %                 <<"name">> => <<"cache-mainnet/lmdb">>
+            %             }
+            %         ]
+            %     },
+            %     #{
+            %         <<"store-module">> => hb_store_gateway,
+            %         <<"store">> =>
+            %             [
+            %                 #{
+            %                     <<"store-module">> => hb_store_lmdb,
+            %                     <<"name">> => <<"cache-mainnet/lmdb">>
+            %                 }
+            %             ]
+            %     }
+            % ],
+
+        store =>
+            [
                 #{
                     <<"store-module">> => hb_store_fs,
-                    <<"name">> => <<"cache-mainnet">>
+                    <<"name">> => <<"minimal-cache">>
                 },
-                #{
-                    <<"store-module">> => hb_store_gateway,
-                    <<"subindex">> => [
-                        #{
-                            <<"name">> => <<"Data-Protocol">>,
-                            <<"value">> => <<"ao">>
-                        },
-                        #{
-                            <<"name">> => <<"Data-Protocol">>,
-                            <<"value">> => <<"Load-S3">>
-                        }
-                    ],
-                    <<"store">> => 
-                    [
-                        #{
-                            <<"store-module">> => hb_store_lmdb,
-                            <<"name">> => <<"cache-mainnet/lmdb">>
-                        }
-                    ]
-                },
-                #{
-                    <<"store-module">> => hb_store_gateway,
-                    <<"store">> =>
-                        [
-                            #{
-                                <<"store-module">> => hb_store_lmdb,
-                                <<"name">> => <<"cache-mainnet/lmdb">>
-                            }
-                        ]
-                },
-                #{<<"store-module">> => hb_gateway_s3} % <- last fallback
+                #{<<"store-module">> => hb_gateway_s3},
+                #{<<"store-module">> => hb_store_gateway}
             ],
-
-        % store =>
-        %     [
-        %         #{<<"store-module">> => hb_gateway_s3},
-        %         #{<<"store-module">> => hb_store_gateway},
-        %         #{
-        %             <<"store-module">> => hb_store_fs,
-        %             <<"name">> => <<"minimal-cache">>
-        %         }
-        %     ],
         default_index => #{ <<"device">> => <<"hyperbuddy@1.0">> },
         % Should we use the latest cached state of a process when computing?
         process_now_from_cache => false,
@@ -248,10 +248,10 @@ default_message() ->
         http_extra_opts =>
             #{
                 force_message => true,
-                cache_control => [<<"always">>]
+                cache_control => [<<"never">>]
             },
         % Should the node store all signed messages?
-        store_all_signed => true,
+        store_all_signed => false,
         % Should the node use persistent processes?
         process_workers => false,
         % Options for the router device
@@ -259,7 +259,7 @@ default_message() ->
             routes => []
         },
         % The hb_gateway_s3 bucket name, storing temporal offchain ANS-104 dataitems
-        s3_bucket => <<"offchain-dataitems">>
+        s3_bucket => <<"kyve">>
         % Should the node track and expose prometheus metrics?
         % We do not set this explicitly, so that the hb_features:test() value
         % can be used to determine if we should expose metrics instead,

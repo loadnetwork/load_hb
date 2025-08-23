@@ -346,15 +346,25 @@ get_object_handler(Bucket, Key, Msg, Opts) ->
     io:format("S3 DEBUG: Config - Endpoint=~p, AccessKeyId=~p, Region=~p~n", [Endpoint, AccessKeyId, Region]),
     io:format("S3 DEBUG: Calling s3_nif:get_object~n"),
     % args are passed as binary
+    % case s3_nif:get_object(
+    %     Endpoint,        
+    %     AccessKeyId,     
+    %     SecretAccessKey, 
+    %     Region,          
+    %     Bucket,          
+    %     Key,
+    %     Range              
+    % ) of
     case s3_nif:get_object(
-        Endpoint,        
-        AccessKeyId,     
-        SecretAccessKey, 
-        Region,          
-        Bucket,          
-        Key,
-        Range              
+        hb_util:bin(Endpoint),        % ← Convert to binary
+        hb_util:bin(AccessKeyId),     
+        hb_util:bin(SecretAccessKey), 
+        hb_util:bin(Region),          
+        hb_util:bin(Bucket),          
+        hb_util:bin(Key),
+        hb_util:bin(Range)              
     ) of
+
 
         {ok, S3Response} ->
             io:format("S3 DEBUG: s3_nif success, S3Response=~p~n", [S3Response]),

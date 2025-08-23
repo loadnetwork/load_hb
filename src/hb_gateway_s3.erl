@@ -4,7 +4,7 @@
 
 %% @doc Read ANS-104 DataItem from S3's `s3_bucket` using dev_s3 device
 read(ID, Opts) ->
-    Bucket = hb_opts:get(s3_bucket, <<"offchain-dataitems">>, Opts),
+    Bucket = hb_opts:get(s3_bucket, <<"kyve">>, Opts),
     Key = <<"dataitems/", ID/binary, ".ans104">>,    
 
 case dev_s3:get_object_handler(Bucket, Key, #{}, Opts#{internal => true}) of
