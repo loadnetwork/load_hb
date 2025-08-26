@@ -65,12 +65,54 @@ read(ID, Opts) ->
             }
         }
     end,
+    % Try local cache first, then Arweave
     case query(Query, Variables, Opts) of
-        {error, Reason} -> {error, Reason};
+        {error, Reason} -> 
+            % In case the dataitem does not exist on Arweave/cache, then fallback to the s3 temp dataitems bucket
+            case hb_gateway_s3:read(ID, Opts) of
+                {ok, S3Message} -> {ok, S3Message};
+                {error, _} -> {error, Reason}  % Return original Arweave error
+            end;
         {ok, GqlMsg} ->
-            case hb_ao:get(<<"data/transactions/edges/1/node">>, GqlMsg, Opts) of
-                not_found -> {error, not_found};
-                Item = #{<<"id">> := ID} -> result_to_message(ID, Item, Opts)
+            % Check if GraphQL returned empty edges first
+            case hb_ao:get(<<"data/transactions/edges">>, GqlMsg, Opts) of
+                [] ->
+                    % Empty edges array - fallback to S3
+                    ?event(gateway, {s3_fallback_triggered, empty_edges, ID}),
+                    case hb_gateway_s3:read(ID, Opts) of
+                        {ok, S3Message} -> 
+                            ?event(gateway, {s3_fallback_success, ID}),
+                            {ok, S3Message};
+                        {error, S3Error} -> 
+                            ?event(gateway, {s3_fallback_failed, ID, S3Error}),
+                            {error, not_found}
+                    end;
+                not_found ->
+                    % No edges field at all - fallback to S3
+                    ?event(gateway, {s3_fallback_triggered, no_edges_field, ID}),
+                    case hb_gateway_s3:read(ID, Opts) of
+                        {ok, S3Message} -> 
+                            ?event(gateway, {s3_fallback_success, ID}),
+                            {ok, S3Message};
+                        {error, S3Error} -> 
+                            ?event(gateway, {s3_fallback_failed, ID, S3Error}),
+                            {error, not_found}
+                    end;
+                _Edges ->
+                    % We have edges, try to get the first node
+                    case hb_ao:get(<<"data/transactions/edges/1/node">>, GqlMsg, Opts) of
+                        not_found -> 
+                            ?event(gateway, {s3_fallback_triggered, node_not_found, ID}),
+                            case hb_gateway_s3:read(ID, Opts) of
+                                {ok, S3Message} -> 
+                                    ?event(gateway, {s3_fallback_success, ID}),
+                                    {ok, S3Message};
+                                {error, S3Error} -> 
+                                    ?event(gateway, {s3_fallback_failed, ID, S3Error}),
+                                    {error, not_found}
+                            end;
+                        Item = #{<<"id">> := ID} -> result_to_message(ID, Item, Opts)
+                    end
             end
     end.
 
@@ -114,7 +156,11 @@ data(ID, Opts) ->
             {ok, hb_ao:get(<<"body">>, Res, <<>>, Opts)};
         Res ->
             ?event(gateway, {request_error, {id, ID}, {response, Res}}),
-            {error, no_viable_gateway}
+            % Fallback to retrieve dataitem Data from the s3 bucket
+            case hb_gateway_s3:data(ID, Opts) of
+                {ok, S3Data} -> {ok, S3Data};
+                {error, _} -> {error, no_viable_gateway}
+            end
     end.
 
 %% @doc Find the location of the scheduler based on its ID, through GraphQL.

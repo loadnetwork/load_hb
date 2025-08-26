@@ -171,7 +171,8 @@ default_message() ->
             #{<<"name">> => <<"secret@1.0">>, <<"module">> => dev_secret},
             #{<<"name">> => <<"wasi@1.0">>, <<"module">> => dev_wasi},
             #{<<"name">> => <<"wasm-64@1.0">>, <<"module">> => dev_wasm},
-            #{<<"name">> => <<"whois@1.0">>, <<"module">> => dev_whois}
+            #{<<"name">> => <<"whois@1.0">>, <<"module">> => dev_whois},
+            #{<<"name">> => <<"s3@1.0">>, <<"module">> => dev_s3}
         ],
         %% Default execution cache control options
         cache_control => [<<"no-cache">>, <<"no-store">>],
@@ -272,11 +273,19 @@ default_message() ->
                     <<"name">> => <<"cache-mainnet">>
                 },
                 #{
+                    <<"store-module">> => hb_gateway_s3,
+                    <<"name">> => <<"load-s3">>
+                },
+                #{
                     <<"store-module">> => hb_store_gateway,
                     <<"subindex">> => [
                         #{
                             <<"name">> => <<"Data-Protocol">>,
                             <<"value">> => <<"ao">>
+                        },
+                        #{
+                            <<"name">> => <<"Data-Protocol">>,
+                            <<"value">> => <<"Load-S3">>
                         }
                     ],
                     <<"local-store">> => [?DEFAULT_PRIMARY_STORE]
