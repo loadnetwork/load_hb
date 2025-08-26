@@ -35,7 +35,31 @@ query(Obj, <<"transactions">>, Args, Opts) ->
             end,
             Matches
         ),
-    {ok, Messages};
+    % If no messages found in cache, try Load S3 (~s3@1.0) fallback
+    case Messages of
+        [] ->
+            ?event({transactions_cache_empty_trying_s3, Args}),
+            % Try S3 fallback for each match
+            S3Messages = lists:filtermap(
+                fun(Match) ->
+                    case hb_gateway_s3:read(Match, Opts) of
+                        {ok, S3Msg} -> {true, S3Msg};
+                        {error, _} -> false
+                    end
+                end,
+                Matches
+            ),
+            case S3Messages of
+                [] ->
+                    ?event({transactions_s3_fallback_empty}),
+                    {ok, []};
+                _ ->
+                    ?event({transactions_s3_fallback_success, length(S3Messages)}),
+                    {ok, S3Messages}
+            end;
+        _ ->
+            {ok, Messages}
+    end;
 query(Obj, <<"transaction">>, #{<<"id">> := ID}, Opts) ->
     ?event({transaction_query, 
             {object, Obj}, 
@@ -47,8 +71,16 @@ query(Obj, <<"transaction">>, #{<<"id">> := ID}, Opts) ->
             ?event({transaction_found, {id, ID}, {msg, Msg}}),
             {ok, Msg};
         not_found -> 
-            ?event({transaction_not_found, {id, ID}}),
-            {ok, null}
+            ?event({transaction_not_found_trying_s3, {id, ID}}),
+            % Try S3 fallback for single transaction
+            case hb_gateway_s3:read(ID, Opts) of
+                {ok, S3Msg} ->
+                    ?event({transaction_s3_fallback_success, {id, ID}}),
+                    {ok, S3Msg};
+                {error, _Reason} ->
+                    ?event({transaction_s3_fallback_failed, {id, ID}}),
+                    {ok, null}
+            end
     end;
 query(List, <<"edges">>, _Args, _Opts) ->
     {ok, [{ok, Msg} || Msg <- List]};

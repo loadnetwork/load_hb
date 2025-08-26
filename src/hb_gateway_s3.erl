@@ -87,7 +87,6 @@ tx_to_message(TX, _Opts) ->
     BaseMessage = #{
         <<"data">> => TX#tx.data,
         <<"id">> => hb_util:encode(hb_util:id(TX, signed)),
-        <<"tags">> => TX#tx.tags,
         <<"owner">> => hb_util:encode(TX#tx.owner),
         <<"signature">> => hb_util:encode(TX#tx.signature)
     },
