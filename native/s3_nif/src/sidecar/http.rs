@@ -66,7 +66,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(app_state);
 
     let listener =
-        tokio::net::TcpListener::bind(format!("127.0.0.1:{}", sidecar_config.port)).await?;
+        tokio::net::TcpListener::bind(format!("0.0.0.0:{}", sidecar_config.port)).await?;
 
     axum::serve(listener, app).await?;
     Ok(())
