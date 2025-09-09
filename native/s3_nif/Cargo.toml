@@ -9,6 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 
 [dependencies]
+bundles_rs = { git = "https://github.com/loadnetwork/bundles-rs.git", branch = "main"}
 aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 aws-smithy-types = "1.0"
 aws-sdk-s3 = "1.96.0"
@@ -27,8 +28,11 @@ uuid = { version = "1.0", features = ["v4"] }
 rustler = "0.29.1"
 futures = "0.3.31"
 byteorder = "1.5.0"
+anyhow = "1.0.99"
+infer = "0.19.0"
+dotenvy = "0.15.7"
 
 
 [[bin]]
-name = "s3_nif"
-path = "src/bin/main.rs"
+name = "sidecar"
+path = "src/bin/sidecar.rs"
