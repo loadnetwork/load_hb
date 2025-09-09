@@ -10,13 +10,11 @@ pub async fn delete_objects(
         .into_iter()
         .map(|key| ObjectIdentifier::builder().key(key).build())
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| aws_sdk_s3::Error::from(e))?;
+        .map_err(aws_sdk_s3::Error::from)?;
 
     let delete_builder = Delete::builder().set_objects(Some(objects));
 
-    let delete_request = delete_builder
-        .build()
-        .map_err(|e| aws_sdk_s3::Error::from(e))?;
+    let delete_request = delete_builder.build().map_err(aws_sdk_s3::Error::from)?;
 
     let result = client
         .delete_objects()

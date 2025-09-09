@@ -47,17 +47,17 @@ pub fn delete_objects(
                         let delete_marker_version_id =
                             deleted_obj.delete_marker_version_id().unwrap_or("");
 
-                        result.insert(format!("deleted_{}_key", i), key.as_bytes().to_vec());
+                        result.insert(format!("deleted_{i}_key"), key.as_bytes().to_vec());
                         result.insert(
-                            format!("deleted_{}_version_id", i),
+                            format!("deleted_{i}_version_id"),
                             version_id.as_bytes().to_vec(),
                         );
                         result.insert(
-                            format!("deleted_{}_delete_marker", i),
+                            format!("deleted_{i}_delete_marker"),
                             delete_marker.as_bytes().to_vec(),
                         );
                         result.insert(
-                            format!("deleted_{}_delete_marker_version_id", i),
+                            format!("deleted_{i}_delete_marker_version_id"),
                             delete_marker_version_id.as_bytes().to_vec(),
                         );
                     }
@@ -77,11 +77,11 @@ pub fn delete_objects(
                         let message = error.message().unwrap_or("");
                         let version_id = error.version_id().unwrap_or("");
 
-                        result.insert(format!("error_{}_key", i), key.as_bytes().to_vec());
-                        result.insert(format!("error_{}_code", i), code.as_bytes().to_vec());
-                        result.insert(format!("error_{}_message", i), message.as_bytes().to_vec());
+                        result.insert(format!("error_{i}_key"), key.as_bytes().to_vec());
+                        result.insert(format!("error_{i}_code"), code.as_bytes().to_vec());
+                        result.insert(format!("error_{i}_message"), message.as_bytes().to_vec());
                         result.insert(
-                            format!("error_{}_version_id", i),
+                            format!("error_{i}_version_id"),
                             version_id.as_bytes().to_vec(),
                         );
                     }
@@ -96,7 +96,7 @@ pub fn delete_objects(
                 Ok(result)
             }
 
-            Err(e) => Err(format!("Error: {}", e)),
+            Err(e) => Err(format!("Error: {e}")),
         }
     })
 }

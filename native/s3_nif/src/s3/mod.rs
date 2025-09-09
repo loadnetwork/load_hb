@@ -103,7 +103,7 @@ pub async fn get_object_with_metadata(
     key: &str,
     range: &str,
 ) -> Result<(Vec<u8>, Option<String>), S3Error> {
-    let cache_key = format!("{}:{}", bucket_name, key);
+    let cache_key = format!("{bucket_name}:{key}");
 
     // Try to get from cache first (using write lock for proper LRU behavior)
     {

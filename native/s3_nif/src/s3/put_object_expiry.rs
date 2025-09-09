@@ -16,13 +16,13 @@ pub async fn put_object_expiry(
     body: ByteStream,
     expiry_days: i32,
 ) -> Result<PutObjectOutput, aws_sdk_s3::Error> {
-    let _ = add_expiry_rule_if_needed(client, bucket_name, expiry_days).await?;
+    add_expiry_rule_if_needed(client, bucket_name, expiry_days).await?;
 
     let response = client
         .put_object()
         .bucket(bucket_name)
         .key(key)
-        .tagging(format!("expiry-days={}", expiry_days))
+        .tagging(format!("expiry-days={expiry_days}"))
         .body(body)
         .send()
         .await?;
@@ -35,14 +35,13 @@ async fn add_expiry_rule_if_needed(
     bucket: &str,
     expiry_days: i32,
 ) -> Result<(), aws_sdk_s3::Error> {
-    if expiry_days < MIN_OBJECT_EXPIRY_DAYS || expiry_days > MAX_OBJECT_EXPIRY_DAYS {
+    if !(MIN_OBJECT_EXPIRY_DAYS..=MAX_OBJECT_EXPIRY_DAYS).contains(&expiry_days) {
         let build_error = BuildError::other(format!(
-            "expiry days must be between {} and {}",
-            MIN_OBJECT_EXPIRY_DAYS, MAX_OBJECT_EXPIRY_DAYS
+            "expiry days must be between {MIN_OBJECT_EXPIRY_DAYS} and {MAX_OBJECT_EXPIRY_DAYS}"
         ));
         return Err(aws_sdk_s3::Error::from(build_error));
     }
-    let rule_id = format!("expire-{}-days", expiry_days);
+    let rule_id = format!("expire-{expiry_days}-days");
 
     let existing_config = client
         .get_bucket_lifecycle_configuration()
@@ -84,10 +83,7 @@ async fn add_expiry_rule_if_needed(
             .send()
             .await?;
 
-        println!(
-            "created new lifecycle rule for {} days for bucket {}",
-            expiry_days, bucket
-        );
+        println!("created new lifecycle rule for {expiry_days} days for bucket {bucket}");
     }
 
     Ok(())

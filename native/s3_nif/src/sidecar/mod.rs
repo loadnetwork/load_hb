@@ -3,8 +3,8 @@ pub mod http;
 pub mod range;
 pub mod tags;
 
+use anyhow::{Error, anyhow};
 use aws_sdk_s3::Client;
-use anyhow::{anyhow, Error};
 
 #[derive(Clone)]
 pub struct AppState {

@@ -4,7 +4,7 @@ pub(crate) fn extract_mime_from_tags(tag_bytes: &[u8]) -> String {
     // parse ANS-104 Avro tags
     if let Ok(tags) = decode_tags(tag_bytes) {
         if let Some(m) = find_mime_in_tags(&tags) {
-            println!("Found MIME type in Avro tags: {}", m);
+            println!("Found MIME type in Avro tags: {m}");
             return m;
         }
     }
@@ -15,7 +15,7 @@ pub(crate) fn extract_mime_from_tags(tag_bytes: &[u8]) -> String {
 pub fn find_mime_in_tags(tags: &[Tag]) -> Option<String> {
     for t in tags {
         if t.name.trim().eq_ignore_ascii_case("content-type") {
-            return Some(t.value.clone())
+            return Some(t.value.clone());
         }
     }
     None

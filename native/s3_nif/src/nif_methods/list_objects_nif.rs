@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 #[rustler::nif(schedule = "DirtyCpu")]
+#[allow(clippy::too_many_arguments)]
 pub fn list_objects(
     endpoint: String,
     access_key_id: String,
@@ -84,25 +85,22 @@ pub fn list_objects(
                         let owner_id = object.owner().and_then(|o| o.id()).unwrap_or("");
 
                         // store each object with indexed keys
-                        result.insert(format!("object_{}_key", i), key.as_bytes().to_vec());
+                        result.insert(format!("object_{i}_key"), key.as_bytes().to_vec());
                         result.insert(
-                            format!("object_{}_last_modified", i),
+                            format!("object_{i}_last_modified"),
                             last_modified.as_bytes().to_vec(),
                         );
-                        result.insert(format!("object_{}_etag", i), etag.as_bytes().to_vec());
-                        result.insert(format!("object_{}_size", i), size.as_bytes().to_vec());
+                        result.insert(format!("object_{i}_etag"), etag.as_bytes().to_vec());
+                        result.insert(format!("object_{i}_size"), size.as_bytes().to_vec());
                         result.insert(
-                            format!("object_{}_storage_class", i),
+                            format!("object_{i}_storage_class"),
                             storage_class.as_bytes().to_vec(),
                         );
                         result.insert(
-                            format!("object_{}_owner_display_name", i),
+                            format!("object_{i}_owner_display_name"),
                             owner_display_name.as_bytes().to_vec(),
                         );
-                        result.insert(
-                            format!("object_{}_owner_id", i),
-                            owner_id.as_bytes().to_vec(),
-                        );
+                        result.insert(format!("object_{i}_owner_id"), owner_id.as_bytes().to_vec());
                     }
                     result.insert(
                         "object_count".to_string(),
@@ -116,7 +114,7 @@ pub fn list_objects(
                 if !common_prefixes.is_empty() {
                     for (i, common_prefix) in common_prefixes.iter().enumerate() {
                         let prefix = common_prefix.prefix().unwrap_or("");
-                        result.insert(format!("common_prefix_{}", i), prefix.as_bytes().to_vec());
+                        result.insert(format!("common_prefix_{i}"), prefix.as_bytes().to_vec());
                     }
                     result.insert(
                         "common_prefix_count".to_string(),
@@ -129,7 +127,7 @@ pub fn list_objects(
                 Ok(result)
             }
 
-            Err(e) => Err(format!("Error: {}", e)),
+            Err(e) => Err(format!("Error: {e}")),
         }
     })
 }

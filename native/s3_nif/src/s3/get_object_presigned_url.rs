@@ -10,10 +10,9 @@ pub async fn generate_get_presigned_url(
     key: &str,
     duration: u64,
 ) -> Result<String, aws_sdk_s3::Error> {
-    if duration < MIN_PRESIGNED_URL_DURATION || duration > MAX_PRESIGNED_URL_DURATION {
+    if !(MIN_PRESIGNED_URL_DURATION..=MAX_PRESIGNED_URL_DURATION).contains(&duration) {
         let err = BuildError::other(format!(
-            "Error: presigned url duration should be between {}s & {}s",
-            MIN_PRESIGNED_URL_DURATION, MAX_PRESIGNED_URL_DURATION
+            "Error: presigned url duration should be between {MIN_PRESIGNED_URL_DURATION}s & {MAX_PRESIGNED_URL_DURATION}s"
         ));
         return Err(aws_sdk_s3::Error::from(err));
     }

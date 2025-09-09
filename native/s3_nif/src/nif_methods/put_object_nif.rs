@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 #[rustler::nif(schedule = "DirtyCpu")]
+#[allow(clippy::too_many_arguments)]
 fn put_object(
     endpoint: String,
     access_key_id: String,
@@ -123,7 +124,7 @@ fn put_object(
                 Ok(result)
             }
 
-            Err(e) => Err(format!("Error {}", e)),
+            Err(e) => Err(format!("Error {e}")),
         }
     })
 }

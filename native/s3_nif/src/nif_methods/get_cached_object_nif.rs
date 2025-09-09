@@ -39,7 +39,7 @@ fn get_cached_object(
 
                 Ok(result)
             }
-            Err(_) => Err(format!("Error: failed to retrieve cached object")),
+            Err(_) => Err("Error: failed to retrieve cached object".to_string()),
         }
     })
 }

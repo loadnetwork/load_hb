@@ -247,7 +247,7 @@ pub fn head_object(
                 );
                 if let Some(metadata) = output.metadata() {
                     for (key, value) in metadata {
-                        let meta_key = format!("metadata_{}", key);
+                        let meta_key = format!("metadata_{key}");
                         result.insert(meta_key, value.as_bytes().to_vec());
                     }
                 }
@@ -255,7 +255,7 @@ pub fn head_object(
                 Ok(result)
             }
 
-            Err(e) => Err(format!("Error: {}", e)),
+            Err(e) => Err(format!("Error: {e}")),
         }
     })
 }

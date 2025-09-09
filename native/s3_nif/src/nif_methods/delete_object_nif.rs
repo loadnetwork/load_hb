@@ -45,7 +45,7 @@ pub fn delete_object(
                 Ok(result)
             }
 
-            Err(e) => Err(format!("Error: {}", e)),
+            Err(e) => Err(format!("Error: {e}")),
         }
     })
 }

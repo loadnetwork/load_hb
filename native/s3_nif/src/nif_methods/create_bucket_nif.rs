@@ -31,7 +31,7 @@ fn create_bucket(
 
                 Ok(result)
             }
-            Err(e) => Err(format!("Error: {}", e)),
+            Err(e) => Err(format!("Error: {e}")),
         }
     })
 }
