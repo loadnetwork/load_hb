@@ -1,5 +1,6 @@
 pub mod nif_methods;
 pub mod s3;
+pub mod sidecar;
 use crate::nif_methods::{
     create_bucket, delete_object, delete_objects, get_cached_object, get_object, head_bucket,
     head_object, list_objects, presigned_get_object, put_object,
