@@ -2,9 +2,12 @@ pub mod ans104;
 pub mod http;
 pub mod range;
 pub mod tags;
+pub mod jwt;
 
 use anyhow::{Error, anyhow};
 use aws_sdk_s3::Client;
+
+pub const SIDECAR_SERVER_ENDPOINT: &str = "https://gateway.s3-node-1.load.network";
 
 #[derive(Clone)]
 pub struct AppState {

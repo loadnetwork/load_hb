@@ -5,18 +5,24 @@ use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::Response,
-    routing::get,
+    routing::{get, post},
+    Json
 };
 use futures::TryStreamExt;
+use serde_json::json;
 use tokio_util::io::ReaderStream;
 use tower_http::cors::CorsLayer;
+use serde::Serialize;
+
+use crate::sidecar::jwt::create_signed_dataitem_url;
 
 use crate::s3::{DATAITEMS_BUCKET, DATAITEMS_DIR, create_s3_client, get_object};
-use crate::sidecar::{AppState, ans104, get_env_var, range};
+use crate::sidecar::{AppState, ans104, get_env_var, range, SIDECAR_SERVER_ENDPOINT};
 
 #[derive(serde::Deserialize)]
-struct RangeQuery {
+struct ResolveQuery {
     range: Option<String>,
+    token: Option<String>,
 }
 
 #[derive(Debug)]
@@ -26,6 +32,12 @@ struct SidecarConfig {
     secret_access_key: String,
     region: String,
     port: String,
+    jwk_priv: String
+}
+
+#[derive(Serialize)]
+struct SignedUrlResponse {
+    signed_url: String,
 }
 
 impl SidecarConfig {
@@ -36,9 +48,28 @@ impl SidecarConfig {
             secret_access_key: get_env_var("SECRET_ACCESS_KEY")?,
             region: get_env_var("REGION")?,
             port: get_env_var("PORT")?,
+            jwk_priv: get_env_var("PRESIGNED_URL_JWT_PRIV")?
         })
     }
 }
+
+fn get_header(headers: &HeaderMap, name: &str) -> Result<String, StatusCode> {
+    headers
+        .get(name)
+        .and_then(|h| h.to_str().ok())
+        .map(String::from)
+        .ok_or(StatusCode::BAD_REQUEST)
+}
+
+fn validate_api_key(headers: &HeaderMap) -> Result<(), StatusCode> {
+    let auth_header = get_header(headers, "authorization")?;
+    let token = auth_header.strip_prefix("Bearer ").ok_or(StatusCode::UNAUTHORIZED)?;
+    if token != get_env_var("SECRET_ACCESS_KEY").unwrap_or_default() {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok(())
+}
+
 
 pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     let sidecar_config = SidecarConfig::load_env()?;
@@ -62,6 +93,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/resolve/:dataitem_id", get(resolve_dataitem))
         .route("/health", get(|| async { "sidecar running" }))
+        .route("/sign", post(create_signed_url))
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 
@@ -74,7 +106,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn resolve_dataitem(
     Path(dataitem_id): Path<String>,
-    Query(params): Query<RangeQuery>,
+    Query(params): Query<ResolveQuery>,
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
@@ -89,10 +121,31 @@ async fn resolve_dataitem(
         })
         .unwrap_or_default();
 
-    let key = format!("{DATAITEMS_DIR}/{dataitem_id}.ans104");
+    // determine bucket and key based on jwt token presence
+    let (bucket_name, key) = if let Some(token) = params.token {
+        // private dataitem
+        let claims = match crate::sidecar::jwt::validate_dataitem_token(&token, &dataitem_id) {
+            Ok(claims) => claims,
+            Err(_) => {
+                return Ok(Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .header("content-type", "application/json")
+                    .body(serde_json::to_string(&json!({"error": "invalid token or it reached expiration timestamp"})).unwrap().into())
+                    .unwrap());
+            }
+        };
+        
+        let bucket = claims.bucket_name;
+        let key = format!("{}.ans104", dataitem_id);
+        (bucket, key)
+    } else {
+        // public dataitem
+        let bucket = DATAITEMS_BUCKET.to_string();
+        let key = format!("{}/{}.ans104", DATAITEMS_DIR, dataitem_id);
+        (bucket, key)
+    };
 
-    // Fetch header
-    let header_obj = get_object(&state.s3_client, DATAITEMS_BUCKET, &key, "bytes=0-2047")
+    let header_obj = get_object(&state.s3_client, &bucket_name, &key, "bytes=0-2047")
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
     let header_bytes = header_obj
@@ -107,13 +160,14 @@ async fn resolve_dataitem(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     if range_str.is_empty() {
-        stream_data_section(&state.s3_client, &key, data_offset, None, &mime_type).await
+        stream_data_section(&state.s3_client, &key, &bucket_name, data_offset, None, &mime_type).await
     } else {
         let (start, end_opt) =
             range::parse_range(&range_str).ok_or(StatusCode::RANGE_NOT_SATISFIABLE)?;
         stream_data_section(
             &state.s3_client,
             &key,
+            &bucket_name,
             data_offset,
             Some((start, end_opt)),
             &mime_type,
@@ -125,6 +179,7 @@ async fn resolve_dataitem(
 async fn stream_data_section(
     client: &aws_sdk_s3::Client,
     key: &str,
+    bucket_name: &str,
     data_offset: usize,
     range: Option<(u64, Option<u64>)>,
     mime_type: &str,
@@ -140,7 +195,7 @@ async fn stream_data_section(
         None => format!("bytes={data_offset}-"),
     };
 
-    let obj = get_object(client, DATAITEMS_BUCKET, key, &s3_range)
+    let obj = get_object(client, bucket_name, key, &s3_range)
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
@@ -171,4 +226,23 @@ async fn stream_data_section(
     response
         .body(body)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+async fn create_signed_url(headers: HeaderMap) -> Result<Json<SignedUrlResponse>, StatusCode> {
+    validate_api_key(&headers)?;
+    
+    let bucket_name = get_header(&headers, "x-bucket-name")?;
+    let load_acc = get_header(&headers, "x-load-acc")?;
+    let dataitem_id = get_header(&headers, "x-dataitem-id")?;
+    let expires_minutes = get_header(&headers, "x-expires-minutes")
+        .unwrap_or("60".to_string())
+        .parse::<i64>()
+        .unwrap_or(60);
+    
+    let token = create_signed_dataitem_url(&bucket_name, &load_acc, &dataitem_id, expires_minutes)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    let signed_url = format!("{SIDECAR_SERVER_ENDPOINT}/resolve/{dataitem_id}?token={token}");
+    
+    Ok(Json(SignedUrlResponse { signed_url }))
 }
