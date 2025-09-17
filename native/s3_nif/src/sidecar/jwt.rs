@@ -1,8 +1,8 @@
-use jsonwebtoken::{encode, decode, Header, Algorithm, Validation, EncodingKey, DecodingKey};
-use serde::{Deserialize, Serialize};
-use chrono::{Utc, Duration};
-use anyhow::{anyhow, Error};
 use crate::sidecar::get_env_var;
+use anyhow::{Error, anyhow};
+use chrono::{Duration, Utc};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct DataitemClaims {
@@ -22,7 +22,7 @@ pub fn create_signed_dataitem_url(
     let now = Utc::now();
     let exp = now + Duration::minutes(expires_in_minutes);
     let secret_key = get_env_var("PRESIGNED_URL_JWT_PRIV")?;
-    
+
     let claims = DataitemClaims {
         bucket_name: bucket_name.to_string(),
         load_acc: load_acc.to_string(),
@@ -30,13 +30,13 @@ pub fn create_signed_dataitem_url(
         exp: exp.timestamp(),
         iat: now.timestamp(),
     };
-    
+
     let token = encode(
         &Header::default(),
         &claims,
         &EncodingKey::from_secret(secret_key.as_ref()),
     )?;
-    
+
     Ok(token)
 }
 
@@ -50,17 +50,17 @@ pub(crate) fn validate_dataitem_token(
         &DecodingKey::from_secret(secret_key.as_ref()),
         &Validation::new(Algorithm::HS256),
     )?;
-    
+
     let claims = token_data.claims;
-    
+
     if claims.dataitem_id != expected_dataitem_id {
         return Err(anyhow!("Dataitem ID mismatch"));
     }
-    
+
     // let now = Utc::now().timestamp();
     // if claims.exp < now {
     //     return Err(anyhow!("Token expired"));
     // }
-    
+
     Ok(claims)
 }

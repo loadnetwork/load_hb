@@ -1,23 +1,22 @@
 use anyhow::Error;
 use axum::{
-    Router,
+    Json, Router,
     body::Body,
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::Response,
     routing::{get, post},
-    Json
 };
 use futures::TryStreamExt;
+use serde::Serialize;
 use serde_json::json;
 use tokio_util::io::ReaderStream;
 use tower_http::cors::CorsLayer;
-use serde::Serialize;
 
 use crate::sidecar::jwt::create_signed_dataitem_url;
 
 use crate::s3::{DATAITEMS_BUCKET, DATAITEMS_DIR, create_s3_client, get_object};
-use crate::sidecar::{AppState, ans104, get_env_var, range, SIDECAR_SERVER_ENDPOINT};
+use crate::sidecar::{AppState, SIDECAR_SERVER_ENDPOINT, ans104, get_env_var, range};
 
 #[derive(serde::Deserialize)]
 struct ResolveQuery {
@@ -32,7 +31,7 @@ struct SidecarConfig {
     secret_access_key: String,
     region: String,
     port: String,
-    jwk_priv: String
+    jwk_priv: String,
 }
 
 #[derive(Serialize)]
@@ -48,7 +47,7 @@ impl SidecarConfig {
             secret_access_key: get_env_var("SECRET_ACCESS_KEY")?,
             region: get_env_var("REGION")?,
             port: get_env_var("PORT")?,
-            jwk_priv: get_env_var("PRESIGNED_URL_JWT_PRIV")?
+            jwk_priv: get_env_var("PRESIGNED_URL_JWT_PRIV")?,
         })
     }
 }
@@ -63,13 +62,14 @@ fn get_header(headers: &HeaderMap, name: &str) -> Result<String, StatusCode> {
 
 fn validate_api_key(headers: &HeaderMap) -> Result<(), StatusCode> {
     let auth_header = get_header(headers, "authorization")?;
-    let token = auth_header.strip_prefix("Bearer ").ok_or(StatusCode::UNAUTHORIZED)?;
+    let token = auth_header
+        .strip_prefix("Bearer ")
+        .ok_or(StatusCode::UNAUTHORIZED)?;
     if token != get_env_var("SECRET_ACCESS_KEY").unwrap_or_default() {
         return Err(StatusCode::UNAUTHORIZED);
     }
     Ok(())
 }
-
 
 pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     let sidecar_config = SidecarConfig::load_env()?;
@@ -130,11 +130,17 @@ async fn resolve_dataitem(
                 return Ok(Response::builder()
                     .status(StatusCode::UNAUTHORIZED)
                     .header("content-type", "application/json")
-                    .body(serde_json::to_string(&json!({"error": "invalid token or it reached expiration timestamp"})).unwrap().into())
+                    .body(
+                        serde_json::to_string(
+                            &json!({"error": "invalid token or it reached expiration timestamp"}),
+                        )
+                        .unwrap()
+                        .into(),
+                    )
                     .unwrap());
             }
         };
-        
+
         let bucket = claims.bucket_name;
         let key = format!("{}.ans104", dataitem_id);
         (bucket, key)
@@ -160,7 +166,15 @@ async fn resolve_dataitem(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     if range_str.is_empty() {
-        stream_data_section(&state.s3_client, &key, &bucket_name, data_offset, None, &mime_type).await
+        stream_data_section(
+            &state.s3_client,
+            &key,
+            &bucket_name,
+            data_offset,
+            None,
+            &mime_type,
+        )
+        .await
     } else {
         let (start, end_opt) =
             range::parse_range(&range_str).ok_or(StatusCode::RANGE_NOT_SATISFIABLE)?;
@@ -230,7 +244,7 @@ async fn stream_data_section(
 
 async fn create_signed_url(headers: HeaderMap) -> Result<Json<SignedUrlResponse>, StatusCode> {
     validate_api_key(&headers)?;
-    
+
     let bucket_name = get_header(&headers, "x-bucket-name")?;
     let load_acc = get_header(&headers, "x-load-acc")?;
     let dataitem_id = get_header(&headers, "x-dataitem-id")?;
@@ -238,11 +252,11 @@ async fn create_signed_url(headers: HeaderMap) -> Result<Json<SignedUrlResponse>
         .unwrap_or("60".to_string())
         .parse::<i64>()
         .unwrap_or(60);
-    
+
     let token = create_signed_dataitem_url(&bucket_name, &load_acc, &dataitem_id, expires_minutes)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     let signed_url = format!("{SIDECAR_SERVER_ENDPOINT}/resolve/{dataitem_id}?token={token}");
-    
+
     Ok(Json(SignedUrlResponse { signed_url }))
 }
