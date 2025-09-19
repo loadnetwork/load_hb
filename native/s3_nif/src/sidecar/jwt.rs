@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 pub(crate) struct DataitemClaims {
     pub bucket_name: String,
     pub load_acc: String,
-    pub dataitem_id: String,
+    pub dataitem_key: String,
     pub exp: i64, // expiration timestamp
     pub iat: i64, // issued-at timestamp
 }
@@ -16,7 +16,7 @@ pub(crate) struct DataitemClaims {
 pub fn create_signed_dataitem_url(
     bucket_name: &str,
     load_acc: &str,
-    dataitem_id: &str,
+    dataitem_key: &str,
     expires_in_minutes: i64,
 ) -> Result<String, Error> {
     let now = Utc::now();
@@ -26,7 +26,7 @@ pub fn create_signed_dataitem_url(
     let claims = DataitemClaims {
         bucket_name: bucket_name.to_string(),
         load_acc: load_acc.to_string(),
-        dataitem_id: dataitem_id.to_string(),
+        dataitem_key: dataitem_key.to_string(),
         exp: exp.timestamp(),
         iat: now.timestamp(),
     };
@@ -42,7 +42,7 @@ pub fn create_signed_dataitem_url(
 
 pub(crate) fn validate_dataitem_token(
     token: &str,
-    expected_dataitem_id: &str,
+    expected_dataitem_key: &str,
 ) -> Result<DataitemClaims, Error> {
     let secret_key = get_env_var("PRESIGNED_URL_JWT_PRIV")?;
     let token_data = decode::<DataitemClaims>(
@@ -53,14 +53,9 @@ pub(crate) fn validate_dataitem_token(
 
     let claims = token_data.claims;
 
-    if claims.dataitem_id != expected_dataitem_id {
+    if claims.dataitem_key != expected_dataitem_key {
         return Err(anyhow!("Dataitem ID mismatch"));
     }
-
-    // let now = Utc::now().timestamp();
-    // if claims.exp < now {
-    //     return Err(anyhow!("Token expired"));
-    // }
 
     Ok(claims)
 }

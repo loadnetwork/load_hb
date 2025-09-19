@@ -91,7 +91,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     let app_state = AppState { s3_client };
 
     let app = Router::new()
-        .route("/resolve/:dataitem_id", get(resolve_dataitem))
+        .route("/resolve/*dataitem_key", get(resolve_dataitem))
         .route("/health", get(|| async { "sidecar running" }))
         .route("/sign", post(create_signed_url))
         .layer(CorsLayer::permissive())
@@ -105,12 +105,12 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn resolve_dataitem(
-    Path(dataitem_id): Path<String>,
+    Path(dataitem_key): Path<String>,
     Query(params): Query<ResolveQuery>,
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    println!("Resolving dataitem: {dataitem_id}");
+    println!("Resolving dataitem key: {dataitem_key}");
 
     let range_str = params
         .range
@@ -124,7 +124,7 @@ async fn resolve_dataitem(
     // determine bucket and key based on jwt token presence
     let (bucket_name, key) = if let Some(token) = params.token {
         // private dataitem
-        let claims = match crate::sidecar::jwt::validate_dataitem_token(&token, &dataitem_id) {
+        let claims = match crate::sidecar::jwt::validate_dataitem_token(&token, &dataitem_key) {
             Ok(claims) => claims,
             Err(_) => {
                 return Ok(Response::builder()
@@ -142,12 +142,11 @@ async fn resolve_dataitem(
         };
 
         let bucket = claims.bucket_name;
-        let key = format!("{}.ans104", dataitem_id);
-        (bucket, key)
+        (bucket, dataitem_key)
     } else {
         // public dataitem
         let bucket = DATAITEMS_BUCKET.to_string();
-        let key = format!("{}/{}.ans104", DATAITEMS_DIR, dataitem_id);
+        let key = format!("{DATAITEMS_DIR}/{dataitem_key}.ans104");
         (bucket, key)
     };
 
@@ -243,20 +242,23 @@ async fn stream_data_section(
 }
 
 async fn create_signed_url(headers: HeaderMap) -> Result<Json<SignedUrlResponse>, StatusCode> {
+    println!("function called");
     validate_api_key(&headers)?;
+
+    println!("passed validate_api_key");
 
     let bucket_name = get_header(&headers, "x-bucket-name")?;
     let load_acc = get_header(&headers, "x-load-acc")?;
-    let dataitem_id = get_header(&headers, "x-dataitem-id")?;
+    let dataitem_key = get_header(&headers, "x-dataitem-key")?;
     let expires_minutes = get_header(&headers, "x-expires-minutes")
         .unwrap_or("60".to_string())
         .parse::<i64>()
         .unwrap_or(60);
 
-    let token = create_signed_dataitem_url(&bucket_name, &load_acc, &dataitem_id, expires_minutes)
+    let token = create_signed_dataitem_url(&bucket_name, &load_acc, &dataitem_key, expires_minutes)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let signed_url = format!("{SIDECAR_SERVER_ENDPOINT}/resolve/{dataitem_id}?token={token}");
+    let signed_url = format!("{SIDECAR_SERVER_ENDPOINT}/resolve/{dataitem_key}?token={token}");
 
     Ok(Json(SignedUrlResponse { signed_url }))
 }
