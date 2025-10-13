@@ -8,16 +8,15 @@ use std::sync::Arc;
 
 use anyhow::{Error, anyhow};
 use aws_sdk_s3::Client;
-use x402_axum::{facilitator_client::FacilitatorClient, X402Middleware};
+use x402_axum::{X402Middleware, facilitator_client::FacilitatorClient};
 
 pub const SIDECAR_SERVER_ENDPOINT: &str = "https://gateway.s3-node-1.load.network";
 pub const FACILITATOR_URL: &str = "https://x402.load.network";
-pub const FACILITATOR_PAYEE: &str = "0x197f818c1313DC58b32D88078ecdfB40EA822614";
 
 #[derive(Clone)]
 pub struct AppState {
     pub s3_client: Client,
-    pub x402_facilitator: Arc<FacilitatorClient>
+    pub x402_facilitator: Arc<FacilitatorClient>,
 }
 
 pub async fn run() -> Result<(), Error> {

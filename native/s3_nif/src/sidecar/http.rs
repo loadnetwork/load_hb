@@ -3,27 +3,29 @@ use axum::{
     Json, Router,
     body::Body,
     extract::{Path, Query, State},
-    http::{HeaderMap, StatusCode,HeaderValue},
+    http::{HeaderMap, HeaderValue, StatusCode},
     response::Response,
     routing::{get, post},
 };
 use futures::TryStreamExt;
 use serde::Serialize;
 use serde_json::json;
+use std::str::FromStr;
+use std::sync::Arc;
 use tokio_util::io::ReaderStream;
 use tower_http::cors::CorsLayer;
-use x402_rs::network::{USDCDeployment, Network};
-use x402_axum::{IntoPriceTag};
-use x402_rs::types::{EvmAddress, Scheme, PaymentRequirements, Base64Bytes};
-use std::str::FromStr;
-use x402_axum::layer::X402Paygate;
-use std::sync::Arc;
+use x402_axum::IntoPriceTag;
 use x402_axum::facilitator_client::FacilitatorClient;
+use x402_axum::layer::X402Paygate;
+use x402_rs::network::{Network, USDCDeployment};
+use x402_rs::types::{Base64Bytes, EvmAddress, PaymentRequirements, Scheme};
 
 use crate::sidecar::jwt::create_signed_dataitem_url;
 
 use crate::s3::{DATAITEMS_BUCKET, DATAITEMS_DIR, create_s3_client, get_object};
-use crate::sidecar::{AppState, SIDECAR_SERVER_ENDPOINT, FACILITATOR_URL, ans104, get_env_var, range};
+use crate::sidecar::{
+    AppState, FACILITATOR_URL, SIDECAR_SERVER_ENDPOINT, ans104, get_env_var, range,
+};
 
 #[derive(serde::Deserialize)]
 struct ResolveQuery {
@@ -39,7 +41,7 @@ struct SidecarConfig {
     region: String,
     port: String,
     jwk_priv: String,
-    base_url: String
+    base_url: String,
 }
 
 #[derive(Serialize)]
@@ -56,7 +58,7 @@ impl SidecarConfig {
             region: get_env_var("REGION")?,
             port: get_env_var("PORT")?,
             jwk_priv: get_env_var("PRESIGNED_URL_JWT_PRIV")?,
-            base_url: get_env_var("BASE_URL")?
+            base_url: get_env_var("BASE_URL")?,
         })
     }
 }
@@ -100,7 +102,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
 
     let x402_facilitator = Arc::new(FacilitatorClient::try_from(FACILITATOR_URL)?);
 
-    let app_state = AppState { 
+    let app_state = AppState {
         s3_client,
         x402_facilitator,
     };
@@ -109,12 +111,18 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .route("/resolve/{*dataitem_key}", get(resolve_dataitem))
         .route("/health", get(|| async { "sidecar running" }))
         .route("/sign", post(create_signed_url))
-        .route("/protected/resolve/{payee}/{*dataitem_key}", get(resolve_protected_dataitem))
+        .route(
+            "/protected/resolve/{payee}/{*dataitem_key}",
+            get(resolve_protected_dataitem),
+        )
         .layer(CorsLayer::permissive())
         .with_state(app_state);
 
-    let listener =
-        tokio::net::TcpListener::bind(format!("{}:{}",sidecar_config.base_url, sidecar_config.port)).await?;
+    let listener = tokio::net::TcpListener::bind(format!(
+        "{}:{}",
+        sidecar_config.base_url, sidecar_config.port
+    ))
+    .await?;
 
     axum::serve(listener, app).await?;
     Ok(())
@@ -135,21 +143,26 @@ async fn resolve_protected_dataitem(
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    let sidecar_config = SidecarConfig::load_env().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let sidecar_config =
+        SidecarConfig::load_env().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // 402 payment requirements for this specific request
-    let payee = EvmAddress::from_str(&pay_to)
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    let payee = EvmAddress::from_str(&pay_to).map_err(|_| StatusCode::BAD_REQUEST)?;
     let usdc_deployment = USDCDeployment::by_network(Network::PolygonAmoy)
         .pay_to(payee)
         .amount(0.01)
         .unwrap();
-    
+    // default to localhost and fallback to external service url for server's cloud compatibility
+    let base_url = get_env_var("EXTERNAL_URL").unwrap_or(format!(
+        "http://{}:{}",
+        sidecar_config.base_url, sidecar_config.port
+    ));
+
     let payment_requirements = vec![PaymentRequirements {
         scheme: Scheme::Exact,
         network: Network::PolygonAmoy,
         max_amount_required: usdc_deployment.amount,
-        resource: format!("http://{}:{}/protected/{}/{}", sidecar_config.base_url, sidecar_config.port, pay_to, dataitem_key)
+        resource: format!("{}/protected/{}/{}", base_url, pay_to, dataitem_key)
             .parse()
             .unwrap(),
         description: "premium dataitem access".to_string(),
@@ -163,42 +176,43 @@ async fn resolve_protected_dataitem(
         })),
         output_schema: None,
     }];
-    
+
     let paygate = X402Paygate {
         facilitator: state.x402_facilitator.clone(),
         payment_requirements: Arc::new(payment_requirements),
     };
-    
+
     // payment verification
     let payment_payload = paygate
         .extract_payment_payload(&headers)
         .await
         .map_err(|_| StatusCode::PAYMENT_REQUIRED)?;
-    
+
     let verify_request = paygate
         .verify_payment(payment_payload)
         .await
         .map_err(|_| StatusCode::PAYMENT_REQUIRED)?;
-    
-    let response = resolve_dataitem_impl(dataitem_key, params, headers.clone(), state.clone()).await?;
-    
+
+    let response =
+        resolve_dataitem_impl(dataitem_key, params, headers.clone(), state.clone()).await?;
+
     // settle payment after successful dataitem resolving
     let settlement = paygate
         .settle_payment(&verify_request)
         .await
         .map_err(|_| StatusCode::PAYMENT_REQUIRED)?;
-    
+
     let payment_response_header: Base64Bytes = settlement
         .try_into()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     let mut final_response = response;
     final_response.headers_mut().insert(
         "x-payment-response",
         HeaderValue::from_bytes(payment_response_header.as_ref())
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
     );
-    
+
     Ok(final_response)
 }
 
