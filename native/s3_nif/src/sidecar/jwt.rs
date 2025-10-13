@@ -62,11 +62,11 @@ pub(crate) fn validate_dataitem_token(
 
     let claims_key = claims.dataitem_key.trim_end_matches(".ans104");
     let expected_key = expected_dataitem_key.trim_end_matches(".ans104");
-    
+
     if claims_key != expected_key {
         return Err(anyhow!(
-            "Dataitem ID mismatch: expected {}, got {}", 
-            expected_dataitem_key, 
+            "Dataitem ID mismatch: expected {}, got {}",
+            expected_dataitem_key,
             claims.dataitem_key
         ));
     }
