@@ -49,6 +49,13 @@ struct SignedUrlResponse {
     signed_url: String,
 }
 
+#[derive(Debug, Clone)]
+struct Payee402 {
+    address_str: String,
+    address_primitive: EvmAddress,
+    amount: f64
+}
+
 impl SidecarConfig {
     pub fn load_env() -> Result<Self, Error> {
         Ok(Self {
@@ -112,7 +119,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", get(|| async { "sidecar running" }))
         .route("/sign", post(create_signed_url))
         .route(
-            "/protected/resolve/{payee}/{*dataitem_key}",
+            "/protected/resolve/{payee}/{dataitem_key}/{*amount}",
             get(resolve_protected_dataitem),
         )
         .layer(CorsLayer::permissive())
@@ -134,11 +141,90 @@ async fn resolve_dataitem(
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    resolve_dataitem_impl(dataitem_key, params, headers, state).await
+    resolve_dataitem_impl(dataitem_key, None, params, headers, state).await
 }
 
+// async fn resolve_protected_dataitem(
+//     Path((pay_to, dataitem_key)): Path<(String, String)>,
+//     Query(params): Query<ResolveQuery>,
+//     headers: HeaderMap,
+//     State(state): State<AppState>,
+// ) -> Result<Response, StatusCode> {
+//     let sidecar_config =
+//         SidecarConfig::load_env().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+//     // 402 payment requirements for this specific request
+//     let payee = EvmAddress::from_str(&pay_to).map_err(|_| StatusCode::BAD_REQUEST)?;
+//     let usdc_deployment = USDCDeployment::by_network(Network::PolygonAmoy)
+//         .pay_to(payee)
+//         .amount(0.01)
+//         .unwrap();
+//     // default to localhost and fallback to external service url for server's cloud compatibility
+//     let base_url = get_env_var("EXTERNAL_URL").unwrap_or(format!(
+//         "http://{}:{}",
+//         sidecar_config.base_url, sidecar_config.port
+//     ));
+
+//     let payment_requirements = vec![PaymentRequirements {
+//         scheme: Scheme::Exact,
+//         network: Network::PolygonAmoy,
+//         max_amount_required: usdc_deployment.amount,
+//         resource: format!("{}/protected/{}/{}", base_url, pay_to, dataitem_key)
+//             .parse()
+//             .unwrap(),
+//         description: "premium dataitem access".to_string(),
+//         mime_type: "application/octet-stream".to_string(),
+//         pay_to: usdc_deployment.pay_to,
+//         max_timeout_seconds: 300,
+//         asset: usdc_deployment.token.address(),
+//         extra: Some(serde_json::json!({
+//             "name": "USDC",
+//             "version": "2"
+//         })),
+//         output_schema: None,
+//     }];
+
+//     let paygate = X402Paygate {
+//         facilitator: state.x402_facilitator.clone(),
+//         payment_requirements: Arc::new(payment_requirements),
+//     };
+
+//     // payment verification
+//     let payment_payload = paygate
+//         .extract_payment_payload(&headers)
+//         .await
+//         .map_err(|_| StatusCode::PAYMENT_REQUIRED)?;
+
+//     let verify_request = paygate
+//         .verify_payment(payment_payload)
+//         .await
+//         .map_err(|_| StatusCode::PAYMENT_REQUIRED)?;
+
+//     let response =
+//         resolve_dataitem_impl(dataitem_key, params, headers.clone(), state.clone()).await?;
+
+//     // settle payment after successful dataitem resolving
+//     let settlement = paygate
+//         .settle_payment(&verify_request)
+//         .await
+//         .map_err(|_| StatusCode::PAYMENT_REQUIRED)?;
+
+//     let payment_response_header: Base64Bytes = settlement
+//         .try_into()
+//         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+//     let mut final_response = response;
+//     final_response.headers_mut().insert(
+//         "x-payment-response",
+//         HeaderValue::from_bytes(payment_response_header.as_ref())
+//             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+//     );
+
+//     Ok(final_response)
+// }
+
 async fn resolve_protected_dataitem(
-    Path((pay_to, dataitem_key)): Path<(String, String)>,
+    Path((pay_to, dataitem_key, amount)): Path<(String, String, String)>,
     Query(params): Query<ResolveQuery>,
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -148,15 +234,22 @@ async fn resolve_protected_dataitem(
 
     // 402 payment requirements for this specific request
     let payee = EvmAddress::from_str(&pay_to).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let payee_amount = amount.parse::<f64>().unwrap_or(0.01);
     let usdc_deployment = USDCDeployment::by_network(Network::PolygonAmoy)
         .pay_to(payee)
-        .amount(0.01)
+        .amount(payee_amount)
         .unwrap();
     // default to localhost and fallback to external service url for server's cloud compatibility
     let base_url = get_env_var("EXTERNAL_URL").unwrap_or(format!(
         "http://{}:{}",
         sidecar_config.base_url, sidecar_config.port
     ));
+
+    let payee_info = Payee402 {
+        address_str: pay_to.clone(),
+        address_primitive: payee,
+        amount: payee_amount
+    };
 
     let payment_requirements = vec![PaymentRequirements {
         scheme: Scheme::Exact,
@@ -194,7 +287,7 @@ async fn resolve_protected_dataitem(
         .map_err(|_| StatusCode::PAYMENT_REQUIRED)?;
 
     let response =
-        resolve_dataitem_impl(dataitem_key, params, headers.clone(), state.clone()).await?;
+        resolve_dataitem_impl(format!("{dataitem_key}.ans104"), Some(payee_info), params, headers.clone(), state.clone()).await?;
 
     // settle payment after successful dataitem resolving
     let settlement = paygate
@@ -218,6 +311,7 @@ async fn resolve_protected_dataitem(
 
 async fn resolve_dataitem_impl(
     dataitem_key: String,
+    payee_info: Option<Payee402>,
     params: ResolveQuery,
     headers: HeaderMap,
     state: AppState,
@@ -234,17 +328,17 @@ async fn resolve_dataitem_impl(
         .unwrap_or_default();
 
     // determine bucket and key based on jwt token presence
-    let (bucket_name, key) = if let Some(token) = params.token {
+    let (bucket_name, key, payee_address, payee_amount) = if let Some(token) = params.token {
         // private dataitem
         let claims = match crate::sidecar::jwt::validate_dataitem_token(&token, &dataitem_key) {
             Ok(claims) => claims,
-            Err(_) => {
+            Err(e) => {
                 return Ok(Response::builder()
                     .status(StatusCode::UNAUTHORIZED)
                     .header("content-type", "application/json")
                     .body(
                         serde_json::to_string(
-                            &json!({"error": "invalid token or it reached expiration timestamp"}),
+                            &json!({"error": e.to_string()}),
                         )
                         .unwrap()
                         .into(),
@@ -254,13 +348,49 @@ async fn resolve_dataitem_impl(
         };
 
         let bucket = claims.bucket_name;
-        (bucket, dataitem_key)
+        (bucket, claims.dataitem_key, claims.payee, claims.amount)
     } else {
         // public dataitem
         let bucket = DATAITEMS_BUCKET.to_string();
         let key = format!("{DATAITEMS_DIR}/{dataitem_key}.ans104");
-        (bucket, key)
+        (bucket, key, None, None)
     };
+
+    // println!("resolving with: {bucket_name} {key} {} {}", payee_address.clone().unwrap_or_default(), payee_amount.clone().unwrap_or_default());
+    // println!("payee info {:?}", payee_info.clone().unwrap());
+
+
+    // validate if the request has 402 data in the JWT token but no Payee402 is provided
+    if payee_address.is_some() && payee_amount.is_some() && payee_info.is_none() {
+                return Ok(Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .header("content-type", "application/json")
+                    .body(
+                        serde_json::to_string(
+                            &json!({"error": "request is missing x402 Payee402 struct, use /protected/resolve/{payee}/{*dataitem_key}/{*amount} instead"}),
+                        )
+                        .unwrap()
+                        .into(),
+                    )
+                    .unwrap());
+    }
+
+    if payee_info.is_some() {
+        let receipt_402 = payee_info.ok_or_else(|| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if payee_address.unwrap_or_default() != receipt_402.address_str || payee_amount.unwrap_or_default() != receipt_402.amount {
+                return Ok(Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .header("content-type", "application/json")
+                    .body(
+                        serde_json::to_string(
+                            &json!({"error": "mistmatch between Payee402 receipt and the provided x402 micropayment params"}),
+                        )
+                        .unwrap()
+                        .into(),
+                    )
+                    .unwrap());
+        }
+    }
 
     let header_obj = get_object(&state.s3_client, &bucket_name, &key, "bytes=0-2047")
         .await
@@ -366,8 +496,10 @@ async fn create_signed_url(headers: HeaderMap) -> Result<Json<SignedUrlResponse>
         .unwrap_or("60".to_string())
         .parse::<i64>()
         .unwrap_or(60);
+    let payee_402 = get_header(&headers, "x-402-address")?;
+    let amount_402 = get_header(&headers, "x-402-amount")?.parse::<f64>().unwrap_or(0.0);
 
-    let token = create_signed_dataitem_url(&bucket_name, &load_acc, &dataitem_key, expires_minutes)
+    let token = create_signed_dataitem_url(&bucket_name, &load_acc, &dataitem_key, expires_minutes, Some(payee_402), Some(amount_402))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let signed_url = format!("{SIDECAR_SERVER_ENDPOINT}/resolve/{dataitem_key}?token={token}");
