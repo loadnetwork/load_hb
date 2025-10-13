@@ -13,7 +13,7 @@ pub(crate) struct DataitemClaims {
     pub iat: i64, // issued-at timestamp
     // x402 data protocol properties
     pub payee: Option<String>,
-    pub amount: Option<f64>
+    pub amount: Option<f64>,
 }
 
 pub fn create_signed_dataitem_url(
@@ -22,7 +22,7 @@ pub fn create_signed_dataitem_url(
     dataitem_key: &str,
     expires_in_minutes: i64,
     payee: Option<String>,
-    amount: Option<f64>
+    amount: Option<f64>,
 ) -> Result<String, Error> {
     let now = Utc::now();
     let exp = now + Duration::minutes(expires_in_minutes);
@@ -35,7 +35,7 @@ pub fn create_signed_dataitem_url(
         exp: exp.timestamp(),
         iat: now.timestamp(),
         payee,
-        amount
+        amount,
     };
 
     let token = encode(
