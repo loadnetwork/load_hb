@@ -141,8 +141,9 @@ async fn root() -> Json<Value> {
         "version": env!("CARGO_PKG_VERSION"),
         "running": true,
         "x402": true,
-        "private-dataitems": true
-
+        "private-dataitems": true,
+        "x402_facilitator": FACILITATOR_URL,
+        "hb_node": "s3-node-1.load.network"
     }));
 }
 
@@ -270,12 +271,12 @@ async fn resolve_dataitem_impl(
         // private dataitem
         let claims = match crate::sidecar::jwt::validate_dataitem_token(&token, &dataitem_key) {
             Ok(claims) => claims,
-            Err(e) => {
+            Err(_) => {
                 return Ok(Response::builder()
                     .status(StatusCode::UNAUTHORIZED)
                     .header("content-type", "application/json")
                     .body(
-                        serde_json::to_string(&json!({"error": e.to_string()}))
+                        serde_json::to_string(&json!({"error": "jwt token invalid or expired"}))
                             .unwrap()
                             .into(),
                     )
