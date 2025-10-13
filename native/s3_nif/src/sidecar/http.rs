@@ -434,18 +434,25 @@ async fn create_signed_url(headers: HeaderMap) -> Result<Json<SignedUrlResponse>
         .unwrap_or("60".to_string())
         .parse::<i64>()
         .unwrap_or(60);
-    let payee_402 = get_header(&headers, "x-402-address")?;
-    let amount_402 = get_header(&headers, "x-402-amount")?
-        .parse::<f64>()
-        .unwrap_or(0.0);
+    
+    let payee_402 = get_header(&headers, "x-402-address").ok();
+    let amount_402 = get_header(&headers, "x-402-amount")
+        .ok()
+        .and_then(|s| s.parse::<f64>().ok())
+        .filter(|&amount| amount > 0.0); 
+
+    let (payee_opt, amount_opt) = match (payee_402, amount_402) {
+        (Some(p), Some(a)) if !p.is_empty() => (Some(p), Some(a)),
+        _ => (None, None),
+    };
 
     let token = create_signed_dataitem_url(
         &bucket_name,
         &load_acc,
         &dataitem_key,
         expires_minutes,
-        Some(payee_402),
-        Some(amount_402),
+        payee_opt,
+        amount_opt,
     )
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
