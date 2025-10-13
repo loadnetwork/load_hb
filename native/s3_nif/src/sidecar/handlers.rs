@@ -32,10 +32,10 @@ pub async fn root() -> Json<Value> {
     return Json(json!({
         "version": env!("CARGO_PKG_VERSION"),
         "running": true,
-        "x402": true,
+        "x402-enabled": true,
         "private-dataitems": true,
-        "x402_facilitator": FACILITATOR_URL,
-        "hb_node": "s3-node-1.load.network"
+        "x402-facilitator": FACILITATOR_URL,
+        "hb-node": "s3-node-1.load.network"
     }));
 }
 
