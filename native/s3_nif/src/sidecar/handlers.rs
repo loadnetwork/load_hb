@@ -185,9 +185,6 @@ pub async fn resolve_dataitem_impl(
         (bucket, key, None, None)
     };
 
-    // println!("resolving with: {bucket_name} {key} {} {}", payee_address.clone().unwrap_or_default(), payee_amount.clone().unwrap_or_default());
-    // println!("payee info {:?}", payee_info.clone().unwrap());
-
     // validate if the request has 402 data in the JWT token but no Payee402 is provided
     if payee_address.is_some() && payee_amount.is_some() && payee_info.is_none() {
         return Ok(Response::builder()
@@ -325,24 +322,11 @@ pub async fn create_signed_url(headers: HeaderMap) -> Result<Json<SignedUrlRespo
         .parse::<i64>()
         .unwrap_or(60);
 
-    // let payee_402 = get_header(&headers, "x-402-address").ok();
-    // let amount_402 = get_header(&headers, "x-402-amount")
-    //     .ok()
-    //     .and_then(|s| s.parse::<f64>().ok())
-    //     .filter(|&amount| amount > 0.0);
-
-    // let (payee_opt, amount_opt) = match (payee_402, amount_402) {
-    //     (Some(p), Some(a)) if !p.is_empty() => (Some(p), Some(a)),
-    //     _ => (None, None),
-    // };
-
     let token = create_signed_dataitem_url(
         &bucket_name,
         &load_acc,
         &dataitem_key,
         expires_minutes,
-        // payee_opt,
-        // amount_opt,
         None,
         None,
     )
