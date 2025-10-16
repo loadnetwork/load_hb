@@ -16,7 +16,7 @@ use x402_axum::layer::X402Paygate;
 use x402_rs::network::{Network, USDCDeployment};
 use x402_rs::types::{Base64Bytes, EvmAddress, PaymentRequirements, Scheme};
 
-use crate::sidecar::jwt::create_signed_dataitem_url;
+use crate::sidecar::{jwt::create_signed_dataitem_url, x402104::Network402104};
 
 use crate::s3::{DATAITEMS_BUCKET, DATAITEMS_DIR, get_object};
 use crate::sidecar::{
@@ -49,7 +49,7 @@ pub async fn resolve_dataitem(
 }
 
 pub async fn resolve_protected_dataitem(
-    Path((pay_to, dataitem_key, amount)): Path<(String, String, String)>,
+    Path((pay_to, dataitem_key, network, amount)): Path<(String, String, String, String)>,
     Query(params): Query<ResolveQuery>,
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -60,7 +60,10 @@ pub async fn resolve_protected_dataitem(
     // 402 payment requirements for this specific request
     let payee = EvmAddress::from_str(&pay_to).map_err(|_| StatusCode::BAD_REQUEST)?;
     let payee_amount = amount.parse::<f64>().unwrap_or(0.01);
-    let usdc_deployment = USDCDeployment::by_network(Network::PolygonAmoy)
+    let x402_network =
+        Network402104::get_x402_network(&network).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let usdc_deployment = x402_network
+        .usdc_deployment
         .pay_to(payee)
         .amount(payee_amount)
         .unwrap();
@@ -78,12 +81,12 @@ pub async fn resolve_protected_dataitem(
 
     let payment_requirements = vec![PaymentRequirements {
         scheme: Scheme::Exact,
-        network: Network::PolygonAmoy,
+        network: x402_network.network,
         max_amount_required: usdc_deployment.amount,
         resource: format!("{}/protected/{}/{}", base_url, pay_to, dataitem_key)
             .parse()
             .unwrap(),
-        description: "premium dataitem access".to_string(),
+        description: "premium xANS-104 dataitem access".to_string(),
         mime_type: "application/octet-stream".to_string(),
         pay_to: usdc_deployment.pay_to,
         max_timeout_seconds: 300,
@@ -97,7 +100,7 @@ pub async fn resolve_protected_dataitem(
 
     let paygate = X402Paygate {
         facilitator: state.x402_facilitator.clone(),
-        payment_requirements: Arc::new(payment_requirements),
+        payment_requirements: Arc::new(payment_requirements.clone()),
     };
 
     // payment verification
@@ -107,7 +110,7 @@ pub async fn resolve_protected_dataitem(
         .map_err(|_| StatusCode::PAYMENT_REQUIRED)?;
 
     let verify_request = paygate
-        .verify_payment(payment_payload)
+        .verify_payment(payment_payload.clone())
         .await
         .map_err(|_| StatusCode::PAYMENT_REQUIRED)?;
 
@@ -329,6 +332,7 @@ pub async fn create_signed_url(headers: HeaderMap) -> Result<Json<SignedUrlRespo
         expires_minutes,
         None,
         None,
+        None,
     )
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -348,15 +352,16 @@ pub async fn create_402_signed_url(headers: HeaderMap) -> Result<String, StatusC
         .parse::<i64>()
         .unwrap_or(60);
 
+    let network_402 = get_header(&headers, "x-402-network").ok();
     let payee_402 = get_header(&headers, "x-402-address").ok();
     let amount_402 = get_header(&headers, "x-402-amount")
         .ok()
         .and_then(|s| s.parse::<f64>().ok())
         .filter(|&amount| amount > 0.0);
 
-    let (payee_opt, amount_opt) = match (payee_402, amount_402) {
-        (Some(p), Some(a)) if !p.is_empty() => (Some(p), Some(a)),
-        _ => (None, None),
+    let (payee_opt, amount_opt, network_opt) = match (payee_402, amount_402, network_402) {
+        (Some(p), Some(a), Some(n)) if !p.is_empty() => (Some(p), Some(a), Some(n)),
+        _ => (None, None, None),
     };
 
     let token = create_signed_dataitem_url(
@@ -366,6 +371,7 @@ pub async fn create_402_signed_url(headers: HeaderMap) -> Result<String, StatusC
         expires_minutes,
         payee_opt.clone(),
         amount_opt,
+        network_opt.clone(),
     )
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -374,6 +380,7 @@ pub async fn create_402_signed_url(headers: HeaderMap) -> Result<String, StatusC
         dataitem_id: dataitem_key,
         payee_address: payee_opt.unwrap_or_default(),
         amount: amount_opt.unwrap_or_default(),
+        network: network_opt.unwrap_or("polygon-amoy".to_string()), // default to polygon-amoy
     };
 
     let json_bytes =

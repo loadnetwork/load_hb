@@ -1,3 +1,4 @@
+use crate::sidecar::x402104::Network402104;
 use anyhow::Error;
 use axum::{
     Router,
@@ -45,6 +46,7 @@ pub(crate) struct Signed402UrlResponse {
     pub dataitem_id: String,
     pub payee_address: String,
     pub amount: f64,
+    pub network: String,
 }
 
 #[derive(Debug, Clone)]
@@ -119,7 +121,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .route("/sign", post(create_signed_url))
         .route("/sign/402", post(create_402_signed_url))
         .route(
-            "/protected/resolve/{payee}/{dataitem_key}/{*amount}",
+            "/protected/resolve/{payee}/{dataitem_key}/{network}/{*amount}",
             get(resolve_protected_dataitem),
         )
         .layer(CorsLayer::permissive())
