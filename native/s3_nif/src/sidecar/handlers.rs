@@ -13,7 +13,6 @@ use std::sync::Arc;
 use tokio_util::io::ReaderStream;
 use x402_axum::IntoPriceTag;
 use x402_axum::layer::X402Paygate;
-use x402_rs::network::{Network, USDCDeployment};
 use x402_rs::types::{Base64Bytes, EvmAddress, PaymentRequirements, Scheme};
 
 use crate::sidecar::{jwt::create_signed_dataitem_url, x402104::Network402104};
@@ -29,14 +28,14 @@ use crate::sidecar::http::{
 };
 
 pub async fn root() -> Json<Value> {
-    return Json(json!({
+    Json(json!({
         "version": env!("CARGO_PKG_VERSION"),
         "running": true,
         "x402-enabled": true,
         "private-dataitems": true,
         "x402-facilitator": FACILITATOR_URL,
         "name": "s3-node-1"
-    }));
+    }))
 }
 
 pub async fn resolve_dataitem(
@@ -92,7 +91,7 @@ pub async fn resolve_protected_dataitem(
         scheme: Scheme::Exact,
         network: x402_network.network,
         max_amount_required: usdc_deployment.amount,
-        resource: format!("{}/protected/{}/{}", base_url, pay_to, dataitem_key)
+        resource: format!("{base_url}/protected/{pay_to}/{dataitem_key}")
             .parse()
             .unwrap(),
         description: "premium xANS-104 dataitem access".to_string(),
@@ -215,7 +214,7 @@ pub async fn resolve_dataitem_impl(
     }
 
     if payee_info.is_some() {
-        let receipt_402 = payee_info.ok_or_else(|| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let receipt_402 = payee_info.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
         if payee_address.unwrap_or_default() != receipt_402.address_str
             || payee_amount.unwrap_or_default() != receipt_402.amount
         {

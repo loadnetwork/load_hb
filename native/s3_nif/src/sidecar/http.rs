@@ -1,4 +1,3 @@
-use crate::sidecar::x402104::Network402104;
 use anyhow::Error;
 use axum::{
     Router,
@@ -32,7 +31,7 @@ pub(crate) struct SidecarConfig {
     pub secret_access_key: String,
     pub region: String,
     pub port: String,
-    pub jwk_priv: String,
+    pub(crate) jwk_priv: String,
     pub base_url: String,
 }
 
