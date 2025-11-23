@@ -35,7 +35,7 @@ pub async fn root() -> Json<Value> {
         "x402-enabled": true,
         "private-dataitems": true,
         "x402-facilitator": FACILITATOR_URL,
-        "hb-node": "s3-node-1.load.network"
+        "name": "s3-node-1"
     }));
 }
 
@@ -45,7 +45,16 @@ pub async fn resolve_dataitem(
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    resolve_dataitem_impl(dataitem_key, None, params, headers, state).await
+    resolve_dataitem_impl(dataitem_key, None, false, params, headers, state).await
+}
+
+pub async fn download_dataitem_binary(
+    Path(dataitem_key): Path<String>,
+    Query(params): Query<ResolveQuery>,
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Response, StatusCode> {
+    resolve_dataitem_impl(dataitem_key, None, true, params, headers, state).await
 }
 
 pub async fn resolve_protected_dataitem(
@@ -117,6 +126,7 @@ pub async fn resolve_protected_dataitem(
     let response = resolve_dataitem_impl(
         format!("{dataitem_key}.ans104"),
         Some(payee_info),
+        false,
         params,
         headers.clone(),
         state.clone(),
@@ -146,6 +156,7 @@ pub async fn resolve_protected_dataitem(
 pub async fn resolve_dataitem_impl(
     dataitem_key: String,
     payee_info: Option<Payee402>,
+    send_raw: bool,
     params: ResolveQuery,
     headers: HeaderMap,
     state: AppState,
@@ -220,6 +231,23 @@ pub async fn resolve_dataitem_impl(
                     )
                     .unwrap());
         }
+    }
+
+    if send_raw {
+        let obj = get_object(&state.s3_client, &bucket_name, &key, "bytes=0-")
+            .await
+            .map_err(|_| StatusCode::NOT_FOUND)?;
+        let content_length = obj.content_length().unwrap_or(0) as u64;
+        let body = Body::from_stream(
+            ReaderStream::new(obj.body.into_async_read()).map_err(std::io::Error::other),
+        );
+        return Response::builder()
+            .header("content-type", "application/octet-stream")
+            .header("content-length", content_length.to_string())
+            .header("access-control-allow-headers", "*")
+            .header("access-control-allow-methods", "GET, OPTIONS")
+            .body(body)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     let header_obj = get_object(&state.s3_client, &bucket_name, &key, "bytes=0-2047")
