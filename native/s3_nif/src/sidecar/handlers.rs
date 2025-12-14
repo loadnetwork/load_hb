@@ -63,7 +63,7 @@ pub async fn resolve_protected_dataitem(
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
     let sidecar_config =
-        SidecarConfig::load_env().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        SidecarConfig::load_env(false).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // 402 payment requirements for this specific request
     let payee = EvmAddress::from_str(&pay_to).map_err(|_| StatusCode::BAD_REQUEST)?;

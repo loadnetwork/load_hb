@@ -57,12 +57,13 @@ pub struct Payee402 {
 }
 
 impl SidecarConfig {
-    pub fn load_env() -> Result<Self, Error> {
+    pub fn load_env(is_fast: bool) -> Result<Self, Error> {
+        let suffix = if is_fast {"_FAST".to_string()} else {"".to_string()};
         Ok(Self {
-            endpoint: get_env_var("ENDPOINT")?,
-            access_key_id: get_env_var("ACCESS_KEY_ID")?,
-            secret_access_key: get_env_var("SECRET_ACCESS_KEY")?,
-            region: get_env_var("REGION")?,
+            endpoint: get_env_var(&format!("ENDPOINT{suffix}"))?,
+            access_key_id: get_env_var(&format!("ACCESS_KEY_ID{suffix}"))?,
+            secret_access_key: get_env_var(&format!("SECRET_ACCESS_KEY{suffix}"))?,
+            region: get_env_var(&format!("REGION{suffix}"))?,
             port: get_env_var("PORT")?,
             jwk_priv: get_env_var("PRESIGNED_URL_JWT_PRIV")?,
             base_url: get_env_var("BASE_URL")?,
@@ -90,7 +91,8 @@ pub fn validate_api_key(headers: &HeaderMap) -> Result<(), StatusCode> {
 }
 
 pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
-    let sidecar_config = SidecarConfig::load_env()?;
+    let sidecar_config = SidecarConfig::load_env(false)?;
+    let sidecar_config_fast = SidecarConfig::load_env(true)?;
 
     println!(
         "offchain ANS-104 streaming sidecar v{}",
