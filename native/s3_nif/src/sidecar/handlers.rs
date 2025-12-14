@@ -38,13 +38,22 @@ pub async fn root() -> Json<Value> {
     }))
 }
 
-pub async fn resolve_dataitem(
+pub async fn resolve_dataitem_normal(
     Path(dataitem_key): Path<String>,
     Query(params): Query<ResolveQuery>,
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    resolve_dataitem_impl(dataitem_key, None, false, params, headers, state).await
+    resolve_dataitem_impl(dataitem_key, None, false, params, headers, state, false).await
+}
+
+pub async fn resolve_dataitem_fast(
+    Path(dataitem_key): Path<String>,
+    Query(params): Query<ResolveQuery>,
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Response, StatusCode> {
+    resolve_dataitem_impl(dataitem_key, None, false, params, headers, state, true).await
 }
 
 pub async fn download_dataitem_binary(
@@ -53,7 +62,7 @@ pub async fn download_dataitem_binary(
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    resolve_dataitem_impl(dataitem_key, None, true, params, headers, state).await
+    resolve_dataitem_impl(dataitem_key, None, true, params, headers, state, false).await
 }
 
 pub async fn resolve_protected_dataitem(
@@ -129,6 +138,7 @@ pub async fn resolve_protected_dataitem(
         params,
         headers.clone(),
         state.clone(),
+        false
     )
     .await?;
 
@@ -159,8 +169,11 @@ pub async fn resolve_dataitem_impl(
     params: ResolveQuery,
     headers: HeaderMap,
     state: AppState,
+    is_fast: bool
 ) -> Result<Response, StatusCode> {
     println!("Resolving dataitem key: {dataitem_key}");
+
+    let s3_client = if is_fast {state.s3_client_fast} else {state.s3_client_normal};
 
     let range_str = params
         .range
@@ -233,7 +246,7 @@ pub async fn resolve_dataitem_impl(
     }
 
     if send_raw {
-        let obj = get_object(&state.s3_client, &bucket_name, &key, "bytes=0-")
+        let obj = get_object(&s3_client, &bucket_name, &key, "bytes=0-")
             .await
             .map_err(|_| StatusCode::NOT_FOUND)?;
         let content_length = obj.content_length().unwrap_or(0) as u64;
@@ -249,7 +262,7 @@ pub async fn resolve_dataitem_impl(
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR);
     }
 
-    let header_obj = get_object(&state.s3_client, &bucket_name, &key, "bytes=0-2047")
+    let header_obj = get_object(&s3_client, &bucket_name, &key, "bytes=0-2047")
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
     let header_bytes = header_obj
@@ -265,7 +278,7 @@ pub async fn resolve_dataitem_impl(
 
     if range_str.is_empty() {
         stream_data_section(
-            &state.s3_client,
+            &s3_client,
             &key,
             &bucket_name,
             data_offset,
@@ -277,7 +290,7 @@ pub async fn resolve_dataitem_impl(
         let (start, end_opt) =
             range::parse_range(&range_str).ok_or(StatusCode::RANGE_NOT_SATISFIABLE)?;
         stream_data_section(
-            &state.s3_client,
+            &s3_client,
             &key,
             &bucket_name,
             data_offset,

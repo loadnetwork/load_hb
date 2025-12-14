@@ -19,7 +19,8 @@ pub const VERIFIER_CONTRACT: &str = "0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582"
 
 #[derive(Clone)]
 pub struct AppState {
-    pub s3_client: Client,
+    pub s3_client_normal: Client,
+    pub s3_client_fast: Client,
     pub x402_facilitator: Arc<FacilitatorClient>,
 }
 

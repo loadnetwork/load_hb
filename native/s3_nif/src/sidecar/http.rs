@@ -14,8 +14,8 @@ use crate::s3::create_s3_client;
 use crate::sidecar::{AppState, FACILITATOR_URL, get_env_var};
 
 use crate::sidecar::handlers::{
-    create_402_signed_url, create_signed_url, download_dataitem_binary, resolve_dataitem,
-    resolve_protected_dataitem, root,
+    create_402_signed_url, create_signed_url, download_dataitem_binary, resolve_dataitem_normal,
+    resolve_protected_dataitem, root, resolve_dataitem_fast
 };
 
 #[derive(serde::Deserialize)]
@@ -100,7 +100,7 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     );
     println!("running on port {}", sidecar_config.port);
 
-    let s3_client = create_s3_client(
+    let s3_client_normal = create_s3_client(
         &sidecar_config.endpoint,
         &sidecar_config.access_key_id,
         &sidecar_config.secret_access_key,
@@ -109,16 +109,27 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await;
 
+    let s3_client_fast = create_s3_client(
+        &sidecar_config_fast.endpoint,
+        &sidecar_config_fast.access_key_id,
+        &sidecar_config_fast.secret_access_key,
+        &sidecar_config_fast.region,
+        Some(true),
+    )
+    .await;
+
     let x402_facilitator = Arc::new(FacilitatorClient::try_from(FACILITATOR_URL)?);
 
     let app_state = AppState {
-        s3_client,
+        s3_client_normal,
+        s3_client_fast,
         x402_facilitator,
     };
 
     let app = Router::new()
         .route("/", get(root))
-        .route("/resolve/{*dataitem_key}", get(resolve_dataitem))
+        .route("/resolve/{*dataitem_key}", get(resolve_dataitem_normal))
+        .route("/resolve/fast/{*dataitem_key}", get(resolve_dataitem_fast))
         .route("/binary/{dataitem_key}", get(download_dataitem_binary))
         .route("/health", get(|| async { "sidecar running" }))
         .route("/sign", post(create_signed_url))
