@@ -65,6 +65,14 @@ pub async fn download_dataitem_binary(
     resolve_dataitem_impl(dataitem_key, None, true, params, headers, state, false).await
 }
 
+pub async fn download_dataitem_binary_fast(
+    Path(dataitem_key): Path<String>,
+    Query(params): Query<ResolveQuery>,
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Response, StatusCode> {
+    resolve_dataitem_impl(dataitem_key, None, true, params, headers, state, true).await
+}
 pub async fn resolve_protected_dataitem(
     Path((pay_to, dataitem_key, network, amount)): Path<(String, String, String, String)>,
     Query(params): Query<ResolveQuery>,
