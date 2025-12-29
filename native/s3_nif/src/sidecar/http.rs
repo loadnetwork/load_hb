@@ -15,7 +15,8 @@ use crate::sidecar::{AppState, FACILITATOR_URL, get_env_var};
 
 use crate::sidecar::handlers::{
     create_402_signed_url, create_signed_url, download_dataitem_binary, resolve_dataitem_normal,
-    resolve_protected_dataitem, root, resolve_dataitem_fast, download_dataitem_binary_fast
+    resolve_protected_dataitem, root, resolve_dataitem_fast, download_dataitem_binary_fast,
+    resolve_dataitem_preview, resolve_dataitem_preview_fast
 };
 
 #[derive(serde::Deserialize)]
@@ -130,6 +131,8 @@ pub async fn serve() -> Result<(), Box<dyn std::error::Error>> {
         .route("/", get(root))
         .route("/resolve/{*dataitem_key}", get(resolve_dataitem_normal))
         .route("/resolve/fast/{*dataitem_key}", get(resolve_dataitem_fast))
+        .route("/resolve/preview/{*dataitem_key}", get(resolve_dataitem_preview))
+        .route("/resolve/preview/fast/{*dataitem_key}", get(resolve_dataitem_preview_fast))
         .route("/binary/{dataitem_key}", get(download_dataitem_binary))
         .route("/binary/fast/{dataitem_key}", get(download_dataitem_binary_fast))
         .route("/health", get(|| async { "sidecar running" }))

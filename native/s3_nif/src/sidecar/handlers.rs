@@ -44,7 +44,7 @@ pub async fn resolve_dataitem_normal(
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    resolve_dataitem_impl(dataitem_key, None, false, params, headers, state, false).await
+    resolve_dataitem_impl(dataitem_key, None, false, params, headers, state, false, false).await
 }
 
 pub async fn resolve_dataitem_fast(
@@ -53,7 +53,25 @@ pub async fn resolve_dataitem_fast(
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    resolve_dataitem_impl(dataitem_key, None, false, params, headers, state, true).await
+    resolve_dataitem_impl(dataitem_key, None, false, params, headers, state, true, false).await
+}
+
+pub async fn resolve_dataitem_preview(
+    Path(dataitem_key): Path<String>,
+    Query(params): Query<ResolveQuery>,
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Response, StatusCode> {
+    resolve_dataitem_impl(dataitem_key, None, false, params, headers, state, false, true).await
+}
+
+pub async fn resolve_dataitem_preview_fast(
+    Path(dataitem_key): Path<String>,
+    Query(params): Query<ResolveQuery>,
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Response, StatusCode> {
+    resolve_dataitem_impl(dataitem_key, None, false, params, headers, state, true, true).await
 }
 
 pub async fn download_dataitem_binary(
@@ -62,7 +80,7 @@ pub async fn download_dataitem_binary(
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    resolve_dataitem_impl(dataitem_key, None, true, params, headers, state, false).await
+    resolve_dataitem_impl(dataitem_key, None, true, params, headers, state, false, false).await
 }
 
 pub async fn download_dataitem_binary_fast(
@@ -71,7 +89,7 @@ pub async fn download_dataitem_binary_fast(
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
-    resolve_dataitem_impl(dataitem_key, None, true, params, headers, state, true).await
+    resolve_dataitem_impl(dataitem_key, None, true, params, headers, state, true, false).await
 }
 pub async fn resolve_protected_dataitem(
     Path((pay_to, dataitem_key, network, amount)): Path<(String, String, String, String)>,
@@ -146,6 +164,7 @@ pub async fn resolve_protected_dataitem(
         params,
         headers.clone(),
         state.clone(),
+        false,
         false
     )
     .await?;
@@ -177,11 +196,32 @@ pub async fn resolve_dataitem_impl(
     params: ResolveQuery,
     headers: HeaderMap,
     state: AppState,
-    is_fast: bool
+    is_fast: bool,
+    allow_manifest: bool
 ) -> Result<Response, StatusCode> {
-    println!("Resolving dataitem key: {dataitem_key}");
+    let s3_client = if is_fast {state.clone().s3_client_fast} else {state.clone().s3_client_normal};
+    let mut resolved_key = dataitem_key;
+    let mut manifest_origin: Option<String> = None;
 
-    let s3_client = if is_fast {state.s3_client_fast} else {state.s3_client_normal};
+    if allow_manifest && params.token.is_none() && payee_info.is_none() {
+        if let Some((manifest_id, manifest_path)) = split_manifest_path(&resolved_key) {
+            let target_id =
+                resolve_manifest_path(&s3_client, &manifest_id, &manifest_path).await?;
+            if let Some(target_id) = target_id {
+                manifest_origin = Some(manifest_id);
+                resolved_key = target_id;
+            } else {
+                return Err(StatusCode::NOT_FOUND);
+            }
+        } else if let Some(target_id) =
+            resolve_manifest_path(&s3_client, &resolved_key, "").await?
+        {
+            manifest_origin = Some(resolved_key.clone());
+            resolved_key = target_id;
+        }
+    }
+
+    println!("Resolving dataitem key: {resolved_key}");
 
     let range_str = params
         .range
@@ -195,7 +235,7 @@ pub async fn resolve_dataitem_impl(
     // determine bucket and key based on jwt token presence
     let (bucket_name, key, payee_address, payee_amount) = if let Some(token) = params.token {
         // private dataitem
-        let claims = match crate::sidecar::jwt::validate_dataitem_token(&token, &dataitem_key) {
+        let claims = match crate::sidecar::jwt::validate_dataitem_token(&token, &resolved_key) {
             Ok(claims) => claims,
             Err(_) => {
                 return Ok(Response::builder()
@@ -215,7 +255,7 @@ pub async fn resolve_dataitem_impl(
     } else {
         // public dataitem
         let bucket = DATAITEMS_BUCKET.to_string();
-        let key = format!("{DATAITEMS_DIR}/{dataitem_key}.ans104");
+        let key = format!("{DATAITEMS_DIR}/{resolved_key}.ans104");
         (bucket, key, None, None)
     };
 
@@ -285,6 +325,27 @@ pub async fn resolve_dataitem_impl(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     if range_str.is_empty() {
+        if allow_manifest && !send_raw {
+            if let Some(manifest_id) = manifest_origin {
+                if mime_type == "text/html" {
+                    let payload =
+                        load_dataitem_payload(&s3_client, &bucket_name, &key).await?;
+                    let html = rewrite_manifest_html(
+                        String::from_utf8_lossy(&payload),
+                        &manifest_id,
+                    );
+                    let body = Body::from(html.clone());
+                    return Response::builder()
+                        .header("content-type", mime_type)
+                        .header("content-length", html.len().to_string())
+                        .header("access-control-allow-origin", "*")
+                        .header("access-control-allow-headers", "*")
+                        .header("access-control-allow-methods", "GET, OPTIONS")
+                        .body(body)
+                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR);
+                }
+            }
+        }
         stream_data_section(
             &s3_client,
             &key,
@@ -307,6 +368,114 @@ pub async fn resolve_dataitem_impl(
         )
         .await
     }
+}
+
+fn split_manifest_path(path: &str) -> Option<(String, String)> {
+    let mut parts = path.splitn(2, '/');
+    let manifest_id = parts.next()?;
+    let rest = parts.next()?;
+    Some((manifest_id.to_string(), rest.to_string()))
+}
+
+async fn resolve_manifest_path(
+    client: &aws_sdk_s3::Client,
+    manifest_id: &str,
+    manifest_path: &str,
+) -> Result<Option<String>, StatusCode> {
+    let bucket_name = DATAITEMS_BUCKET.to_string();
+    let key = format!("{DATAITEMS_DIR}/{manifest_id}.ans104");
+    let payload = load_dataitem_payload(client, &bucket_name, &key).await?;
+
+    let manifest: Value =
+        serde_json::from_slice(&payload).map_err(|_| StatusCode::NOT_FOUND)?;
+
+    if manifest
+        .get("manifest")
+        .and_then(|v| v.as_str())
+        .filter(|v| *v == "arweave/paths")
+        .is_none()
+    {
+        return Ok(None);
+    }
+
+    let paths = manifest
+        .get("paths")
+        .and_then(|v| v.as_object())
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let requested_path = manifest_path.trim_start_matches('/');
+
+    let resolve_path_id = |path: &str| -> Option<String> {
+        paths
+            .get(path)
+            .and_then(|v| v.get("id"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    };
+
+    if requested_path.is_empty() {
+        if let Some(index_path) = manifest
+            .get("index")
+            .and_then(|v| v.get("path"))
+            .and_then(|v| v.as_str())
+        {
+            if let Some(id) = resolve_path_id(index_path) {
+                return Ok(Some(id));
+            }
+        }
+    } else if let Some(id) = resolve_path_id(requested_path) {
+        return Ok(Some(id));
+    }
+
+    let fallback_id = manifest
+        .get("fallback")
+        .and_then(|v| v.get("id"))
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+
+    Ok(fallback_id)
+}
+
+async fn load_dataitem_payload(
+    client: &aws_sdk_s3::Client,
+    bucket_name: &str,
+    key: &str,
+) -> Result<Vec<u8>, StatusCode> {
+    let header_obj = get_object(client, bucket_name, key, "bytes=0-2047")
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    let header_bytes = header_obj
+        .body
+        .collect()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .into_bytes()
+        .to_vec();
+
+    let (_mime_type, data_offset) =
+        ans104::parse_ans104_header(&header_bytes).map_err(|_| StatusCode::NOT_FOUND)?;
+
+    let data_range = format!("bytes={data_offset}-");
+    let obj = get_object(client, bucket_name, key, &data_range)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    let bytes = obj
+        .body
+        .collect()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .into_bytes()
+        .to_vec();
+
+    Ok(bytes)
+}
+
+fn rewrite_manifest_html(html: std::borrow::Cow<'_, str>, manifest_id: &str) -> String {
+    let prefix = format!("/resolve/preview/{manifest_id}/assets/");
+    html.replace("\"/assets/", &format!("\"{prefix}"))
+        .replace("'/assets/", &format!("'{prefix}"))
 }
 
 pub async fn stream_data_section(
