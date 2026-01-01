@@ -6014,7 +6014,7 @@ checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
 name = "s3_nif"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -6033,6 +6033,7 @@ dependencies = [
  "jsonwebtoken",
  "lru 0.12.5",
  "parking_lot",
+ "reqwest",
  "rustler",
  "serde",
  "serde_json",

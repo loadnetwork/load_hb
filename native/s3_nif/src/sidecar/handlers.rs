@@ -19,7 +19,7 @@ use crate::sidecar::{jwt::create_signed_dataitem_url, x402104::Network402104};
 
 use crate::s3::{DATAITEMS_BUCKET, DATAITEMS_DIR, get_object};
 use crate::sidecar::{
-    AppState, FACILITATOR_URL, SIDECAR_SERVER_ENDPOINT, ans104, get_env_var, range,
+    AppState, ARWEAVE_GATEWAY, FACILITATOR_URL, SIDECAR_SERVER_ENDPOINT, ans104, get_env_var, range,
 };
 
 use crate::sidecar::http::{
@@ -54,6 +54,15 @@ pub async fn resolve_dataitem_fast(
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
     resolve_dataitem_impl(dataitem_key, None, false, params, headers, state, true, false).await
+}
+
+pub async fn resolve_dataitem_prod(
+    Path(dataitem_key): Path<String>,
+    Query(params): Query<ResolveQuery>,
+    headers: HeaderMap,
+    State(_state): State<AppState>,
+) -> Result<Response, StatusCode> {
+    resolve_dataitem_prod_impl(dataitem_key, params, headers).await
 }
 
 pub async fn resolve_dataitem_preview(
@@ -370,6 +379,43 @@ pub async fn resolve_dataitem_impl(
     }
 }
 
+async fn resolve_dataitem_prod_impl(
+    dataitem_key: String,
+    params: ResolveQuery,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    let range_str = params
+        .range
+        .or_else(|| {
+            headers
+                .get("range")
+                .and_then(|h| h.to_str().ok().map(String::from))
+        })
+        .unwrap_or_default();
+
+    if let Some((manifest_id, manifest_path)) = split_manifest_path(&dataitem_key) {
+        let manifest_path = manifest_path
+            .strip_prefix("resolve/prod/")
+            .unwrap_or(&manifest_path);
+        let manifest_path = manifest_path
+            .strip_prefix(&format!("{manifest_id}/"))
+            .unwrap_or(manifest_path);
+        if let Some(target_id) =
+            resolve_manifest_path_from_gateway(&manifest_id, manifest_path).await?
+        {
+            return proxy_arweave_dataitem(&target_id, &range_str, Some(&manifest_id)).await;
+        }
+
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    if let Some(target_id) = resolve_manifest_path_from_gateway(&dataitem_key, "").await? {
+        return proxy_arweave_dataitem(&target_id, &range_str, Some(&dataitem_key)).await;
+    }
+
+    proxy_arweave_dataitem(&dataitem_key, &range_str, None).await
+}
+
 fn split_manifest_path(path: &str) -> Option<(String, String)> {
     let mut parts = path.splitn(2, '/');
     let manifest_id = parts.next()?;
@@ -476,6 +522,142 @@ fn rewrite_manifest_html(html: std::borrow::Cow<'_, str>, manifest_id: &str) -> 
     let prefix = format!("/resolve/preview/{manifest_id}/assets/");
     html.replace("\"/assets/", &format!("\"{prefix}"))
         .replace("'/assets/", &format!("'{prefix}"))
+}
+
+async fn resolve_manifest_path_from_gateway(
+    manifest_id: &str,
+    manifest_path: &str,
+) -> Result<Option<String>, StatusCode> {
+    let url = format!("{ARWEAVE_GATEWAY}/raw/{manifest_id}");
+    let response = reqwest::get(url).await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+    if !response.status().is_success() {
+        return Ok(None);
+    }
+
+    let text = response.text().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+    let manifest: Value = match serde_json::from_str(&text) {
+        Ok(value) => value,
+        Err(_) => {
+            return Ok(None);
+        }
+    };
+
+    if manifest
+        .get("manifest")
+        .and_then(|v| v.as_str())
+        .filter(|v| *v == "arweave/paths")
+        .is_none()
+    {
+        return Ok(None);
+    }
+
+    let paths = manifest
+        .get("paths")
+        .and_then(|v| v.as_object())
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let requested_path = manifest_path.trim_start_matches('/');
+
+    let resolve_path_id = |path: &str| -> Option<String> {
+        paths
+            .get(path)
+            .and_then(|v| v.get("id"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    };
+
+    if requested_path.is_empty() {
+        if let Some(index_path) = manifest
+            .get("index")
+            .and_then(|v| v.get("path"))
+            .and_then(|v| v.as_str())
+        {
+            if let Some(id) = resolve_path_id(index_path) {
+                return Ok(Some(id));
+            }
+        }
+    } else if let Some(id) = resolve_path_id(requested_path) {
+        return Ok(Some(id));
+    }
+
+    let fallback_id = manifest
+        .get("fallback")
+        .and_then(|v| v.get("id"))
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+
+    Ok(fallback_id)
+}
+
+async fn proxy_arweave_dataitem(
+    dataitem_id: &str,
+    range_str: &str,
+    manifest_id: Option<&str>,
+) -> Result<Response, StatusCode> {
+    let client = reqwest::Client::new();
+    let mut request = client.get(format!("{ARWEAVE_GATEWAY}/{dataitem_id}"));
+    if !range_str.is_empty() {
+        request = request.header("range", range_str);
+    }
+    let response = request.send().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
+
+    let status =
+        StatusCode::from_u16(response.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    let headers = response.headers().clone();
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|_| StatusCode::BAD_GATEWAY)?;
+
+    let mut resp = Response::builder().status(status);
+
+    if let Some(value) = headers.get("content-type") {
+        resp = resp.header("content-type", value);
+    }
+    if let Some(value) = headers.get("content-length") {
+        resp = resp.header("content-length", value);
+    }
+    if let Some(value) = headers.get("content-range") {
+        resp = resp.header("content-range", value);
+    }
+    if let Some(value) = headers.get("accept-ranges") {
+        resp = resp.header("accept-ranges", value);
+    }
+
+    let body = if range_str.is_empty() {
+        if let (Some(manifest_id), Some(value)) = (manifest_id, headers.get("content-type")) {
+            if value.to_str().ok().unwrap_or_default().starts_with("text/html") {
+                let html = String::from_utf8_lossy(&bytes);
+                let prefix = format!("/resolve/prod/{manifest_id}/");
+                let marker = "__RESOLVE_PROD__";
+                let rewritten = html
+                    .replace(&format!("\"{prefix}"), &format!("\"{marker}"))
+                    .replace(&format!("'{prefix}"), &format!("'{marker}"))
+                    .replace("\"/assets/", &format!("\"{prefix}assets/"))
+                    .replace("'/assets/", &format!("'{prefix}assets/"))
+                    .replace("\"/", &format!("\"{prefix}"))
+                    .replace("'/", &format!("'{prefix}"))
+                    .replace(&format!("\"{marker}"), &format!("\"{prefix}"))
+                    .replace(&format!("'{marker}"), &format!("'{prefix}"));
+                return resp
+                    .header("content-length", rewritten.len().to_string())
+                    .header("access-control-allow-origin", "*")
+                    .header("access-control-allow-headers", "*")
+                    .header("access-control-allow-methods", "GET, OPTIONS")
+                    .body(Body::from(rewritten))
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        }
+        Body::from(bytes)
+    } else {
+        Body::from(bytes)
+    };
+
+    resp.header("access-control-allow-origin", "*")
+        .header("access-control-allow-headers", "*")
+        .header("access-control-allow-methods", "GET, OPTIONS")
+        .body(body)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 pub async fn stream_data_section(

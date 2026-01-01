@@ -1,6 +1,6 @@
 [package]
 name = "s3_nif"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 
 [lib]
@@ -36,6 +36,7 @@ jsonwebtoken = "9.3.1"
 x402-rs = { version = "0.7.9" }
 x402-axum = { version = "0.3.1", features = ["telemetry"] }
 base64 = "0.22"
+reqwest = { version = "0.12.23", default-features = false, features = ["rustls-tls"] }
 
 
 [[bin]]
