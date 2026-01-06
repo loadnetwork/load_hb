@@ -393,6 +393,24 @@ async fn resolve_dataitem_prod_impl(
         })
         .unwrap_or_default();
 
+    let referer_manifest_id = extract_manifest_id_from_referer(&headers);
+    let cookie_manifest_id = extract_manifest_id_from_cookie(&headers);
+    let requested_path = dataitem_key.trim_start_matches('/');
+    let missing_manifest_id =
+        !dataitem_key.contains('/') || dataitem_key.starts_with("assets/");
+    if missing_manifest_id {
+        if let Some(manifest_id) = referer_manifest_id
+            .as_deref()
+            .or(cookie_manifest_id.as_deref())
+        {
+            if let Some(target_id) =
+                resolve_manifest_path_from_gateway(manifest_id, requested_path).await?
+            {
+                return proxy_arweave_dataitem(&target_id, &range_str, Some(manifest_id)).await;
+            }
+        }
+    }
+
     if let Some((manifest_id, manifest_path)) = split_manifest_path(&dataitem_key) {
         let manifest_path = manifest_path
             .strip_prefix("resolve/prod/")
@@ -421,6 +439,34 @@ fn split_manifest_path(path: &str) -> Option<(String, String)> {
     let manifest_id = parts.next()?;
     let rest = parts.next()?;
     Some((manifest_id.to_string(), rest.to_string()))
+}
+
+fn extract_manifest_id_from_referer(headers: &HeaderMap) -> Option<String> {
+    let referer = headers.get("referer")?.to_str().ok()?;
+    let marker = "/resolve/prod/";
+    let start = referer.find(marker)? + marker.len();
+    let rest = &referer[start..];
+    let end = rest
+        .find(['/', '?', '#'])
+        .unwrap_or_else(|| rest.len());
+    let manifest_id = &rest[..end];
+    if manifest_id.is_empty() {
+        None
+    } else {
+        Some(manifest_id.to_string())
+    }
+}
+
+fn extract_manifest_id_from_cookie(headers: &HeaderMap) -> Option<String> {
+    let cookie = headers.get("cookie")?.to_str().ok()?;
+    cookie
+        .split(';')
+        .map(str::trim)
+        .find_map(|part| {
+            part.strip_prefix("resolve_manifest_id=")
+                .filter(|value| !value.is_empty())
+        })
+        .map(str::to_string)
 }
 
 async fn resolve_manifest_path(
@@ -625,14 +671,27 @@ async fn proxy_arweave_dataitem(
     }
 
     let body = if range_str.is_empty() {
-        if let (Some(manifest_id), Some(value)) = (manifest_id, headers.get("content-type")) {
-            if value.to_str().ok().unwrap_or_default().starts_with("text/html") {
+        if let Some(manifest_id) = manifest_id {
+            let content_type = headers
+                .get("content-type")
+                .and_then(|value| value.to_str().ok());
+            let is_html = content_type
+                .map(|value| value.starts_with("text/html"))
+                .unwrap_or_else(|| {
+                    let sample_len = bytes.len().min(2048);
+                    let text = String::from_utf8_lossy(&bytes[..sample_len]);
+                    let lower = text.trim_start().to_lowercase();
+                    lower.starts_with("<!doctype html") || lower.starts_with("<html")
+                });
+            if is_html {
                 let html = String::from_utf8_lossy(&bytes);
                 let prefix = format!("/resolve/prod/{manifest_id}/");
                 let marker = "__RESOLVE_PROD__";
                 let rewritten = html
                     .replace(&format!("\"{prefix}"), &format!("\"{marker}"))
                     .replace(&format!("'{prefix}"), &format!("'{marker}"))
+                    .replace("\"assets/", &format!("\"{prefix}assets/"))
+                    .replace("'assets/", &format!("'{prefix}assets/"))
                     .replace("\"/assets/", &format!("\"{prefix}assets/"))
                     .replace("'/assets/", &format!("'{prefix}assets/"))
                     .replace("\"/", &format!("\"{prefix}"))
@@ -641,6 +700,12 @@ async fn proxy_arweave_dataitem(
                     .replace(&format!("'{marker}"), &format!("'{prefix}"));
                 return resp
                     .header("content-length", rewritten.len().to_string())
+                    .header(
+                        "set-cookie",
+                        format!(
+                            "resolve_manifest_id={manifest_id}; Path=/resolve/prod/; SameSite=Lax"
+                        ),
+                    )
                     .header("access-control-allow-origin", "*")
                     .header("access-control-allow-headers", "*")
                     .header("access-control-allow-methods", "GET, OPTIONS")
